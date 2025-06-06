@@ -46,7 +46,7 @@ def get_gspread_client():
 
 def append_result_to_sheet(name: str, school: str, score: int):
     """
-    한국 시간으로 현재 시간, 이름, 학교, 점수를 구글 시트에 append 합니다.
+    한국 시간으로 현재 시간, 학교, 이름, 점수를 구글 시트에 append 합니다.
     """
     try:
         client = get_gspread_client()
@@ -55,7 +55,8 @@ def append_result_to_sheet(name: str, school: str, score: int):
         now_utc = datetime.datetime.utcnow()
         now_kst = now_utc + datetime.timedelta(hours=9)
         now_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
-        worksheet.append_row([now_str, name, school, score])
+        # '이름'과 '학교' 열 순서를 바꿔서 append
+        worksheet.append_row([now_str, school, name, score])
     except Exception as e:
         st.error(f"구글 시트에 결과를 저장하는 도중 오류가 발생했습니다:\n{e}")
 
@@ -63,6 +64,7 @@ def load_rank_data():
     """
     구글 시트에 저장된 모든 데이터를 불러와서,
     '점수' 컬럼을 기준으로 내림차순 정렬한 pandas.DataFrame을 반환합니다.
+    기대되는 시트 헤더 순서: ["날짜", "학교", "이름", "점수"]
     """
     try:
         client = get_gspread_client()
@@ -70,14 +72,15 @@ def load_rank_data():
         worksheet = sh.sheet1
         data = worksheet.get_all_values()
         if len(data) <= 1:
-            return pd.DataFrame(columns=["날짜", "이름", "학교", "점수"])
+            return pd.DataFrame(columns=["날짜", "학교", "이름", "점수"])
         df = pd.DataFrame(data[1:], columns=data[0])
+        # 점수 컬럼 숫자형으로 변환
         df["점수"] = df["점수"].astype(int)
         df_sorted = df.sort_values(by="점수", ascending=False)
         return df_sorted.reset_index(drop=True)
     except Exception as e:
         st.error(f"구글 시트에서 데이터를 불러오는 도중 오류가 발생했습니다:\n{e}")
-        return pd.DataFrame(columns=["날짜", "이름", "학교", "점수"])
+        return pd.DataFrame(columns=["날짜", "학교", "이름", "점수"])
 
 # ==============================
 # 2) 퀴즈 문제 생성 함수
@@ -135,12 +138,14 @@ def show_rules_and_name_input():
         - 문제당 제한시간 2분(120초), 빨리 풀수록 보너스 점수 부여
         - 총 5번의 기회 제공(오답 시 기회 1개 차감)
         - 나눗셈 문제는 몫과 나머지를 모두 맞춰야 정답 처리
-        - 퀴즈 종료 시 구글 시트에 (날짜, 이름, 학교, 점수) 저장(한국 시간)
+        - 퀴즈 종료 시 구글 시트에 (날짜, 학교, 이름, 점수) 저장(한국 시간)
         - ‘순위 보기’ 버튼으로 상위 10위 확인(학교 포함)
         """
     )
+    # 학교 먼저 입력
     school = st.text_input("학교 이름을 입력하세요", st.session_state.school)
     st.session_state.school = school
+    # 그다음 이름 입력
     name = st.text_input("이름을 입력하세요", st.session_state.name)
     st.session_state.name = name
 
@@ -339,9 +344,10 @@ def show_rank():
     - 구글 시트에 저장된 모든 기록을 불러와서 상위 10명(학생) 표시
     - 학교 검색 기능: 입력된 학교에 속한 학생순위만 표시 (검색 버튼 추가)
     - 학교별 총점 계산 후 상위 5개 학교 순위 출력
+    기대되는 DataFrame 열 순서: ["날짜", "학교", "이름", "점수"]
     """
     st.header("🏆 순위 보기 (Top 10 학생)")
-    df = load_rank_data()  # columns: ["날짜", "이름", "학교", "점수"]
+    df = load_rank_data()  # columns: ["날짜", "학교", "이름", "점수"]
 
     if df.empty:
         st.info("아직 기록이 없습니다.")
@@ -350,7 +356,9 @@ def show_rank():
         top10_students = df.head(10).copy()
         top10_students.index = top10_students.index + 1
         top10_students.reset_index(inplace=True)
-        top10_students.columns = ["순위", "날짜", "이름", "학교", "점수"]
+        # reset_index() 후 컬럼이 ["index","날짜","학교","이름","점수"]가 되므로,
+        # 이를 ["순위","날짜","학교","이름","점수"]로 변경
+        top10_students.columns = ["순위", "날짜", "학교", "이름", "점수"]
         st.subheader("🔝 전체 학생 Top 10")
         st.table(top10_students)
 
@@ -369,16 +377,18 @@ def show_rank():
                 st.warning(f"'{school_filter}' 학교의 기록이 없습니다.")
             else:
                 df_school = df_school.copy()
-                df_school.reset_index(drop=True, inplace=True)
                 df_school.index = df_school.index + 1
                 df_school.reset_index(inplace=True)
-                df_school.columns = ["순위(학교)", "날짜", "이름", "학교", "점수"]
+                # reset_index() 후 컬럼이 ["index","날짜","학교","이름","점수"]
+                # 이를 ["순위(학교)","날짜","학교","이름","점수"]로 변경
+                df_school.columns = ["순위(학교)", "날짜", "학교", "이름", "점수"]
                 st.subheader(f"🎓 '{school_filter}' 학생 순위")
                 st.table(df_school)
 
         # 3) 학교별 총점 집계 및 상위 5개 학교 순위
         st.markdown("---")
         st.subheader("🏫 학교별 총점 Top 5")
+        # group by '학교', sum '점수'
         school_totals = df.groupby("학교")["점수"].sum().reset_index()
         school_totals.columns = ["학교", "총점"]
         school_totals_sorted = school_totals.sort_values(by="총점", ascending=False).head(5)
