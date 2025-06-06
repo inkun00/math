@@ -25,7 +25,7 @@ if "initialized" not in st.session_state:
     st.session_state.saved = False
 
     # 순위 보기 화면에서 사용할 입력값 미리 등록
-    st.session_state.school_filter_input = ""    # 학교명 검색용
+    st.session_state.school_filter_input = ""    # 학교명 검색용 (필요 시 재사용 가능)
     st.session_state.student_name_input = ""     # 학생명 검색용
 
 # ==============================
@@ -346,9 +346,10 @@ def show_rank():
     """
     ‘순위 보기’ 화면:
     - 전체 학생 Top10 (개별 기록 기준)
-    - 개인별 총점 Top10
+    - 개인별 총점 Top10 (이름+학교 조합별)
     - 학교별 총점 Top5
-    - 학생 이름 검색: 입력된 이름으로 총점, 전체 순위, 학교 내 순위 출력
+    - 학생 이름 검색: 입력된 이름으로 모든 매칭된 정보(여러 학교 포함) 출력,
+      각각의 총점, 전체 순위, 학교 내 순위 표시
     """
     st.header("🏆 순위 보기")
 
@@ -366,7 +367,7 @@ def show_rank():
         st.subheader("🔝 전체 학생 Top 10 (개별 기록 기준)")
         st.table(top10_individual)
 
-        # 2) 개인별 총점 Top10 (이름+학교 기준)
+        # 2) 개인별 총점 Top10 (이름+학교 조합별)
         df_student_school_totals = (
             df.groupby(["이름", "학교"], as_index=False)["점수"]
               .sum()
@@ -375,10 +376,17 @@ def show_rank():
         df_student_school_totals = df_student_school_totals.sort_values(by="총점", ascending=False).reset_index(drop=True)
         df_student_school_totals["순위"] = df_student_school_totals.index + 1
 
-        df_student_school_totals_display = df_student_school_totals[["순위", "이름", "학교", "총점"]].head(10)
+        # 학교 내 순위 계산 (이름+학교별 총점 DataFrame에서)
+        df_student_school_totals["학교내순위"] = (
+            df_student_school_totals.groupby("학교")["총점"]
+              .rank(method="dense", ascending=False)
+              .astype(int)
+        )
+
+        df_top10_student_totals = df_student_school_totals[["순위", "이름", "학교", "총점"]].head(10)
         st.markdown("---")
         st.subheader("🥇 개인별 총점 Top 10")
-        st.table(df_student_school_totals_display)
+        st.table(df_top10_student_totals)
 
         # 3) 학교별 총점 Top5
         df_school_totals = (
@@ -405,20 +413,14 @@ def show_rank():
 
         if search_btn and st.session_state.student_name_input.strip():
             search_name = st.session_state.student_name_input.strip()
-            # 해당 이름+학교 조합이 있는지 필터
+            # df_student_school_totals 에서 이름이 동일한 모든 행을 가져옴
             matched = df_student_school_totals[df_student_school_totals["이름"] == search_name]
 
             if matched.empty:
                 st.warning(f"'{search_name}' 학생의 기록이 없습니다.")
             else:
-                # 전체 순위, 학교 내 순위 계산용으로 학교별 랭킹 열 추가
-                df_student_school_totals["학교내순위"] = (
-                    df_student_school_totals.groupby("학교")["총점"]
-                      .rank(method="dense", ascending=False)
-                      .astype(int)
-                )
-
                 st.markdown(f"**검색 결과: {search_name}**")
+                # 같은 이름이 여러 학교에 있을 수 있으므로, 각 행마다 정보 출력
                 for _, row in matched.iterrows():
                     school = row["학교"]
                     total_score = row["총점"]
@@ -447,7 +449,7 @@ def reset_quiz_state():
     st.session_state.problems = []
     st.session_state.saved = False
     st.session_state.show_rank = False
-    # 검색 입력값은 유지(다음에 다시 쓰일 수 있음)
+    # 검색 입력값은 유지해두어도 무방
 
 # ==============================
 # 4) 메인 실행 흐름
