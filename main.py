@@ -7,6 +7,20 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 
+# 디버깅용: 앱 시작 시 st.secrets 전체를 찍습니다.
+st.write("▶ st.secrets.keys() =", list(st.secrets.keys()))
+
+# gcp_service_account 내부 private_key의 repr을 찍어 봅니다.
+if "gcp_service_account" in st.secrets:
+    priv = st.secrets["gcp_service_account"].get("private_key", "")
+    st.write("▶ private_key repr:", repr(priv))
+    # 만약 priv에 \\n(이스케이프)가 포함되어 있다면, repr(priv)에 "\\n"이라고 떠야 합니다.
+    # 반면에 이미 개행이 살아 있다면 repr(priv)는 "\n"으로 줄바꿈을 표시합니다.
+else:
+    st.write("▶ gcp_service_account 키 자체가 없습니다.")
+
+
+
 # ==============================
 # 1) Google Sheets 인증 및 시트 열기
 # ==============================
