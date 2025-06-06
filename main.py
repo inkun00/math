@@ -117,44 +117,7 @@ def generate_problems():
     return problems
 
 # ==============================
-# 3) 버튼 콜백 함수
-# ==============================
-def start_quiz():
-    """
-    '시작하기' 버튼 콜백: 세션 초기화 후 퀴즈 시작
-    """
-    reset_quiz_state()
-    st.session_state.problems = generate_problems()
-    st.session_state.q_idx = 0
-    st.session_state.lives = 5
-    st.session_state.score = 0
-    st.session_state.history = []
-    st.session_state.finished = False
-    st.session_state.saved = False
-    st.session_state.show_rank = False
-    st.session_state.start_time = time.time()
-
-def view_rank():
-    """
-    '순위 보기' 버튼 콜백: 순위 페이지로 전환
-    """
-    st.session_state.show_rank = True
-
-def back_from_rank():
-    """
-    '뒤로 가기' 버튼 콜백: 순위 페이지 해제 및 퀴즈 초기 화면으로
-    """
-    st.session_state.show_rank = False
-    reset_quiz_state()
-
-def restart_quiz():
-    """
-    '다시 시작하기' 버튼 콜백: 퀴즈 재시작
-    """
-    reset_quiz_state()
-
-# ==============================
-# 4) 화면 구성 함수들
+# 3) 화면 구성 함수들
 # ==============================
 def show_title():
     st.title("🔢 곱셈·나눗셈 퀴즈 챌린지")
@@ -183,9 +146,25 @@ def show_rules_and_name_input():
 
     col1, col2 = st.columns(2)
     with col1:
-        st.button("시작하기", on_click=start_quiz)
+        if st.button("시작하기"):
+            if not school.strip():
+                st.warning("학교 이름을 입력해주세요.")
+            elif not name.strip():
+                st.warning("이름을 입력해주세요.")
+            else:
+                reset_quiz_state()
+                st.session_state.problems = generate_problems()
+                st.session_state.q_idx = 0
+                st.session_state.lives = 5
+                st.session_state.score = 0
+                st.session_state.history = []
+                st.session_state.finished = False
+                st.session_state.saved = False
+                st.session_state.show_rank = False
+                st.session_state.start_time = time.time()
     with col2:
-        st.button("순위 보기", on_click=view_rank)
+        if st.button("순위 보기"):
+            st.session_state.show_rank = True
 
 def show_quiz_interface():
     """
@@ -230,7 +209,9 @@ def show_quiz_interface():
         st.markdown(f"## 🔢 **곱셈 문제: {a} × {b} = ?**")
 
         user_input = st.text_input("답을 입력하세요", key=f"mul_ans_{idx}")
-        if st.button("제출하기", key=f"mul_btn_{idx}"):
+        submit = st.button("제출하기", key=f"mul_btn_{idx}")
+
+        if submit:
             try:
                 user_ans = int(user_input.strip())
             except:
@@ -244,4 +225,207 @@ def show_quiz_interface():
 
             if user_ans == answer:
                 gained = base_score + bonus
-                st.success(f"✅ 정답! (+{base_score} + 보너스 {bonus} = 총 {
+                st.success(f"✅ 정답! (+{base_score} + 보너스 {bonus} = 총 {gained}점)")
+                st.session_state.score += gained
+                st.session_state.history.append(("mul_correct", elapsed_final, bonus, base_score))
+            else:
+                st.error(f"❌ 오답! 정답은 **{answer}** 입니다.")
+                st.session_state.lives -= 1
+                st.session_state.history.append(("mul_wrong", elapsed_final, bonus, 0))
+
+            # 다음 문제 이동
+            st.session_state.q_idx += 1
+            st.session_state.start_time = time.time()
+            st.rerun()
+
+    else:
+        # 나눗셈 문제
+        a = prob["a"]
+        b = prob["b"]
+        quotient = prob["quotient"]
+        remainder = prob["remainder"]
+
+        st.markdown(f"## 🔢 **나눗셈 문제: {a} ÷ {b} = ?**")
+        st.markdown("※ 몫과 나머지를 모두 입력하세요.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            user_quotient = st.text_input("몫", key=f"div_quo_{idx}")
+        with col2:
+            user_remainder = st.text_input("나머지", key=f"div_rem_{idx}")
+
+        submit = st.button("제출하기", key=f"div_btn_{idx}")
+
+        if submit:
+            try:
+                user_quo = int(user_quotient.strip())
+                user_rem = int(user_remainder.strip())
+            except:
+                st.error("숫자만 입력해주세요.")
+                return
+
+            elapsed_final = time.time() - st.session_state.start_time
+            time_left_final = max(0, 120 - int(elapsed_final))
+            bonus = time_left_final
+            base_score = quotient  # 몫을 기본 점수로 사용
+
+            if user_quo == quotient and user_rem == remainder:
+                gained = base_score + bonus
+                st.success(f"✅ 정답! (+{base_score} + 보너스 {bonus} = 총 {gained}점)")
+                st.session_state.score += gained
+                st.session_state.history.append(("div_correct", elapsed_final, bonus, base_score))
+            else:
+                correct_str = f"{quotient} … 나머지 {remainder}"
+                st.error(f"❌ 오답! 정답은 **{correct_str}** 입니다.")
+                st.session_state.lives -= 1
+                st.session_state.history.append(("div_wrong", elapsed_final, bonus, 0))
+
+            # 다음 문제 이동
+            st.session_state.q_idx += 1
+            st.session_state.start_time = time.time()
+            st.rerun()
+
+    # 제한 시간 만료 시 종료
+    if time_left <= 0:
+        st.session_state.finished = True
+
+def show_result():
+    """
+    퀴즈 종료 후 결과 화면:
+    - 최종 점수, 정답 개수, 오답 내역 간략 표시
+    - 구글 시트에 저장 안내
+    - 다시 시작하기 / 순위 보기 버튼
+    """
+    st.header("🎉 퀴즈 결과")
+    total_score = st.session_state.score
+    total_correct = sum(1 for rec in st.session_state.history if "correct" in rec[0])
+    st.markdown(f"**최종 점수: {total_score}점**")
+    st.markdown(f"정답 개수: {total_correct}/{len(st.session_state.problems)}")
+
+    st.subheader("📝 문제별 결과")
+    for i, rec in enumerate(st.session_state.history, start=1):
+        status, elapsed, bonus, base = rec
+        if status == "mul_correct":
+            st.markdown(f"{i}. ✅ 곱셈 정답 (문제 점수 {base}, 보너스 {bonus}, 소요시간 {int(elapsed)}초)")
+        elif status == "mul_wrong":
+            st.markdown(f"{i}. ❌ 곱셈 오답 (소요시간 {int(elapsed)}초)")
+        elif status == "div_correct":
+            st.markdown(f"{i}. ✅ 나눗셈 정답 (문제 점수 {base}, 보너스 {bonus}, 소요시간 {int(elapsed)}초)")
+        else:
+            st.markdown(f"{i}. ❌ 나눗셈 오답 (소요시간 {int(elapsed)}초)")
+
+    if not st.session_state.saved:
+        append_result_to_sheet(st.session_state.name, st.session_state.school, total_score)
+        st.session_state.saved = True
+        st.success("✅ 결과가 구글 시트에 저장되었습니다!")
+
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 다시 시작하기"):
+            reset_quiz_state()
+            st.rerun()
+    with col2:
+        if st.button("📊 순위 보기"):
+            st.session_state.show_rank = True
+            st.rerun()
+
+def show_rank():
+    """
+    ‘순위 보기’ 화면:
+    - 구글 시트에 저장된 모든 기록을 불러와서 상위 10명(학생) 표시
+    - 학교 검색 기능: 입력된 학교에 속한 학생순위만 표시
+    - 학교별 총점 계산 후 상위 5개 학교 순위 출력
+    """
+    st.header("🏆 순위 보기 (Top 10 학생)")
+    df = load_rank_data()  # columns: ["날짜", "이름", "학교", "점수"]
+
+    if df.empty:
+        st.info("아직 기록이 없습니다.")
+    else:
+        # 1) 전체 상위 10명 학생 랭킹
+        top10_students = df.head(10).copy()
+        top10_students.index = top10_students.index + 1
+        top10_students.reset_index(inplace=True)
+        top10_students.columns = ["순위", "날짜", "이름", "학교", "점수"]
+        st.subheader("🔝 전체 학생 Top 10")
+        st.table(top10_students)
+
+        # 2) 학교 검색: 입력된 학교에 속한 학생 순위만 보여주기
+        st.markdown("---")
+        school_filter = st.text_input("▶ 학교 이름으로 검색", "")
+        if school_filter:
+            df_school = df[df["학교"].str.contains(school_filter.strip(), case=False)]
+            if df_school.empty:
+                st.warning(f"'{school_filter}' 학교의 기록이 없습니다.")
+            else:
+                df_school = df_school.copy()
+                df_school.reset_index(drop=True, inplace=True)
+                df_school.index = df_school.index + 1
+                df_school.reset_index(inplace=True)
+                df_school.columns = ["순위(학교)", "날짜", "이름", "학교", "점수"]
+                st.subheader(f"🎓 '{school_filter}' 학생 순위")
+                st.table(df_school)
+
+        # 3) 학교별 총점 집계 및 상위 5개 학교 순위
+        st.markdown("---")
+        st.subheader("🏫 학교별 총점 Top 5")
+        # group by '학교', sum '점수'
+        school_totals = df.groupby("학교")["점수"].sum().reset_index()
+        school_totals.columns = ["학교", "총점"]
+        school_totals_sorted = school_totals.sort_values(by="총점", ascending=False).head(5)
+        school_totals_sorted.reset_index(drop=True, inplace=True)
+        school_totals_sorted.index = school_totals_sorted.index + 1
+        school_totals_sorted.reset_index(inplace=True)
+        school_totals_sorted.columns = ["순위(학교)", "학교", "총점"]
+        st.table(school_totals_sorted)
+
+    if st.button("◀ 뒤로 가기"):
+        st.session_state.show_rank = False
+        reset_quiz_state()
+        st.rerun()
+
+def reset_quiz_state():
+    """
+    퀴즈를 다시 초기 상태(인트로 화면)로 돌립니다.
+    """
+    st.session_state.q_idx = 0
+    st.session_state.lives = 5
+    st.session_state.score = 0
+    st.session_state.start_time = None
+    st.session_state.finished = False
+    st.session_state.history = []
+    st.session_state.problems = []
+    st.session_state.saved = False
+    st.session_state.show_rank = False
+
+# ==============================
+# 4) 메인 실행 흐름
+# ==============================
+def main():
+    # 반드시 스크립트 내 첫 번째 Streamlit 호출이어야 합니다.
+    st.set_page_config(page_title="곱셈·나눗셈 퀴즈 챌린지", layout="centered")
+
+    show_title()
+
+    # 순위 보기 모드
+    if st.session_state.show_rank:
+        show_rank()
+        return
+
+    # 퀴즈 시작 전
+    if st.session_state.start_time is None and not st.session_state.finished:
+        show_rules_and_name_input()
+
+    # 퀴즈 진행 중
+    elif not st.session_state.finished:
+        # 1초마다 자동 rerun
+        st_autorefresh(interval=1000, limit=None, key="quiz_timer")
+        show_quiz_interface()
+
+    # 퀴즈 종료 후
+    else:
+        show_result()
+
+if __name__ == "__main__":
+    main()
