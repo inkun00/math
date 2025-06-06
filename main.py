@@ -162,11 +162,11 @@ def show_rules_and_name_input():
                 st.session_state.saved = False
                 st.session_state.show_rank = False
                 st.session_state.start_time = time.time()
-                st.rerun()
+                st.rerun()  # 클릭 한 번으로 즉시 상태 반영
     with col2:
         if st.button("순위 보기"):
             st.session_state.show_rank = True
-            st.rerun()
+            st.rerun()  # 클릭 한 번으로 즉시 상태 반영
 
 def show_quiz_interface():
     """
@@ -364,6 +364,7 @@ def show_rank():
         # 3) 학교별 총점 집계 및 상위 5개 학교 순위
         st.markdown("---")
         st.subheader("🏫 학교별 총점 Top 5")
+        # group by '학교', sum '점수'
         school_totals = df.groupby("학교")["점수"].sum().reset_index()
         school_totals.columns = ["학교", "총점"]
         school_totals_sorted = school_totals.sort_values(by="총점", ascending=False).head(5)
