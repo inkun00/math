@@ -1,3 +1,13 @@
+import streamlit as st
+import time
+import random
+import datetime
+import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+
+
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
     # === 디버깅용 출력 ===
@@ -16,13 +26,7 @@ def get_gspread_client():
 
 
 
-import streamlit as st
-import time
-import random
-import datetime
-import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+
 
 # ==============================
 # 1) Google Sheets 인증 및 시트 열기
