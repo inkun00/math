@@ -1,3 +1,21 @@
+@st.cache_resource(show_spinner=False)
+def get_gspread_client():
+    # === 디버깅용 출력 ===
+    st.write("▶ st.secrets:", st.secrets)  
+    # 혹은
+    # st.write("▶ private_key repr:", repr(st.secrets["gcp_service_account"]["private_key"]))
+    
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds_dict = st.secrets["gcp_service_account"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    client = gspread.authorize(creds)
+    return client
+
+
+
 import streamlit as st
 import time
 import random
