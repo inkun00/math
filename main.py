@@ -162,9 +162,11 @@ def show_rules_and_name_input():
                 st.session_state.saved = False
                 st.session_state.show_rank = False
                 st.session_state.start_time = time.time()
+                st.rerun()
     with col2:
         if st.button("순위 보기"):
             st.session_state.show_rank = True
+            st.rerun()
 
 def show_quiz_interface():
     """
@@ -345,11 +347,8 @@ def show_rank():
     else:
         # 1) 전체 상위 10명 학생 랭킹
         top10_students = df.head(10).copy()
-        top10_students.index = top10_students.index + 1
-        top10_students.reset_index(inplace=True)
-        top10_students.columns = ["순위", "날짜", "이름", "학교", "점수"]
         st.subheader("🔝 전체 학생 Top 10")
-        st.table(top10_students)
+        st.table(top10_students[["날짜", "이름", "학교", "점수"]].style.hide_index())
 
         # 2) 학교 검색: 입력된 학교에 속한 학생 순위만 보여주기
         st.markdown("---")
@@ -359,26 +358,16 @@ def show_rank():
             if df_school.empty:
                 st.warning(f"'{school_filter}' 학교의 기록이 없습니다.")
             else:
-                df_school = df_school.copy()
-                df_school.reset_index(drop=True, inplace=True)
-                df_school.index = df_school.index + 1
-                df_school.reset_index(inplace=True)
-                df_school.columns = ["순위(학교)", "날짜", "이름", "학교", "점수"]
                 st.subheader(f"🎓 '{school_filter}' 학생 순위")
-                st.table(df_school)
+                st.table(df_school[["날짜", "이름", "학교", "점수"]].style.hide_index())
 
         # 3) 학교별 총점 집계 및 상위 5개 학교 순위
         st.markdown("---")
         st.subheader("🏫 학교별 총점 Top 5")
-        # group by '학교', sum '점수'
         school_totals = df.groupby("학교")["점수"].sum().reset_index()
         school_totals.columns = ["학교", "총점"]
         school_totals_sorted = school_totals.sort_values(by="총점", ascending=False).head(5)
-        school_totals_sorted.reset_index(drop=True, inplace=True)
-        school_totals_sorted.index = school_totals_sorted.index + 1
-        school_totals_sorted.reset_index(inplace=True)
-        school_totals_sorted.columns = ["순위(학교)", "학교", "총점"]
-        st.table(school_totals_sorted)
+        st.table(school_totals_sorted[["학교", "총점"]].style.hide_index())
 
     if st.button("◀ 뒤로 가기"):
         st.session_state.show_rank = False
