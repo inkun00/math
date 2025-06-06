@@ -152,6 +152,7 @@ def show_rules_and_name_input():
             elif not name.strip():
                 st.warning("이름을 입력해주세요.")
             else:
+                # 세션 상태 초기화 후 문제 생성
                 reset_quiz_state()
                 st.session_state.problems = generate_problems()
                 st.session_state.q_idx = 0
@@ -162,6 +163,8 @@ def show_rules_and_name_input():
                 st.session_state.saved = False
                 st.session_state.show_rank = False
                 st.session_state.start_time = time.time()
+                # 버튼 클릭 후 즉시 rerun하여 퀴즈 화면으로 전환
+                st.rerun()
     with col2:
         if st.button("순위 보기"):
             st.session_state.show_rank = True
@@ -334,7 +337,7 @@ def show_rank():
     """
     ‘순위 보기’ 화면:
     - 구글 시트에 저장된 모든 기록을 불러와서 상위 10명(학생) 표시
-    - 학교 검색 기능: 입력된 학교에 속한 학생순위만 표시
+    - 학교 검색 기능: 입력된 학교에 속한 학생순위만 표시 (검색 버튼 추가)
     - 학교별 총점 계산 후 상위 5개 학교 순위 출력
     """
     st.header("🏆 순위 보기 (Top 10 학생)")
@@ -351,10 +354,16 @@ def show_rank():
         st.subheader("🔝 전체 학생 Top 10")
         st.table(top10_students)
 
-        # 2) 학교 검색: 입력된 학교에 속한 학생 순위만 보여주기
+        # 2) 학교 검색: 입력된 학교명과 검색 버튼 배치
         st.markdown("---")
-        school_filter = st.text_input("▶ 학교 이름으로 검색", "")
-        if school_filter:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            school_filter = st.text_input("▶ 학교 이름으로 검색", value="", key="school_filter_input")
+        with col2:
+            search_btn = st.button("검색", key="school_filter_btn")
+
+        # “검색” 버튼을 눌렀을 때만 필터 실행
+        if search_btn and school_filter.strip():
             df_school = df[df["학교"].str.contains(school_filter.strip(), case=False)]
             if df_school.empty:
                 st.warning(f"'{school_filter}' 학교의 기록이 없습니다.")
@@ -370,7 +379,6 @@ def show_rank():
         # 3) 학교별 총점 집계 및 상위 5개 학교 순위
         st.markdown("---")
         st.subheader("🏫 학교별 총점 Top 5")
-        # group by '학교', sum '점수'
         school_totals = df.groupby("학교")["점수"].sum().reset_index()
         school_totals.columns = ["학교", "총점"]
         school_totals_sorted = school_totals.sort_values(by="총점", ascending=False).head(5)
