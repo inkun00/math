@@ -232,7 +232,7 @@ def show_quiz_interface():
             elapsed_final = time.time() - st.session_state.start_time
             time_left_final = max(0, 120 - int(elapsed_final))
             bonus = time_left_final
-            base_score = 50
+            base_score = 10
 
             if user_ans == answer:
                 gained = base_score + bonus
