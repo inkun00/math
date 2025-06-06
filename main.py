@@ -27,16 +27,18 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
-def append_result_to_sheet(name: str, score: int):
+def append_result_to_sheet(name: str, school: str, score: int):
     """
-    현재 시간, 이름, 점수를 구글 시트에 append 합니다.
+    한국 시간으로 현재 시간, 이름, 학교, 점수를 구글 시트에 append 합니다.
     """
     try:
         client = get_gspread_client()
         sh = client.open_by_key(GSHEET_KEY)
-        worksheet = sh.sheet1
-        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        worksheet.append_row([now_str, name, score])
+        worksheet = sh.sheet1  # 첫 번째 시트 사용
+        now_utc = datetime.datetime.utcnow()
+        now_kst = now_utc + datetime.timedelta(hours=9)
+        now_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
+        worksheet.append_row([now_str, name, school, score])
     except Exception as e:
         st.error(f"구글 시트에 결과를 저장하는 도중 오류가 발생했습니다:\n{e}")
 
@@ -50,18 +52,20 @@ def load_rank_data():
         sh = client.open_by_key(GSHEET_KEY)
         worksheet = sh.sheet1
         data = worksheet.get_all_values()
+        # 첫 번째 행: 헤더, 이후 행: 실제 데이터
         if len(data) <= 1:
-            return pd.DataFrame(columns=["날짜", "이름", "점수"])
+            return pd.DataFrame(columns=["날짜", "이름", "학교", "점수"])
         df = pd.DataFrame(data[1:], columns=data[0])
         df["점수"] = df["점수"].astype(int)
         df_sorted = df.sort_values(by="점수", ascending=False)
         return df_sorted.reset_index(drop=True)
     except Exception as e:
         st.error(f"구글 시트에서 데이터를 불러오는 도중 오류가 발생했습니다:\n{e}")
-        return pd.DataFrame(columns=["날짜", "이름", "점수"])
+        return pd.DataFrame(columns=["날짜", "이름", "학교", "점수"])
+
 
 # ==============================
-# 2) 퀴즈 문제 생성 함수 (수정)
+# 2) 퀴즈 문제 생성 함수
 # ==============================
 def generate_problems():
     """
@@ -83,10 +87,8 @@ def generate_problems():
         })
     # 6~10: 세자리수 ÷ 두자리수
     for _ in range(5):
-        # 나눗셈 문제 생성 (몫이 소수점 못 나오도록)
         a = random.randint(100, 999)
         b = random.randint(10, 99)
-        # 몫과 나머지 계산
         quotient = a // b
         remainder = a % b
         problems.append({
@@ -99,6 +101,7 @@ def generate_problems():
     random.shuffle(problems)
     return problems
 
+
 # ==============================
 # 3) 화면 구성 함수들
 # ==============================
@@ -107,7 +110,7 @@ def show_title():
 
 def show_rules_and_name_input():
     """
-    초기 화면: 규칙 설명 + 이름 입력 + 시작/순위 보기 버튼
+    초기 화면: 학교 이름 입력 + 사용자 이름 입력 + 시작/순위 보기 버튼
     """
     st.markdown(
         """
@@ -117,18 +120,22 @@ def show_rules_and_name_input():
         - 5문제는 세자리수 ÷ 두자리수 나눗셈 (몫과 나머지)
         - 문제당 제한시간 2분 (120초), 빨리 풀수록 보너스 점수 부여
         - 총 5번의 기회 제공. 오답 시 기회 1개 차감
-        - 나눗셈 문제는 몫과 나머지 모두 맞춰야 정답 처리
-        - 퀴즈 종료 시 구글 시트에 (날짜, 이름, 점수) 저장
-        - ‘순위 보기’ 버튼으로 상위 10위 확인
+        - 나눗셈 문제는 몫과 나머지를 모두 맞춰야 정답 처리
+        - 퀴즈 종료 시 구글 시트에 (날짜, 이름, 학교, 점수) 저장
+        - ‘순위 보기’ 버튼으로 상위 10위 확인 (학교 포함)
         """
     )
+    school = st.text_input("학교 이름을 입력하세요", st.session_state.school)
+    st.session_state.school = school
     name = st.text_input("이름을 입력하세요", st.session_state.name)
     st.session_state.name = name
 
     col1, col2 = st.columns(2)
     with col1:
         if st.button("시작하기"):
-            if name.strip() == "":
+            if not school.strip():
+                st.warning("학교 이름을 입력해주세요.")
+            elif not name.strip():
                 st.warning("이름을 입력해주세요.")
             else:
                 reset_quiz_state()
@@ -169,11 +176,12 @@ def show_quiz_interface():
     # 사이드바: 점수, 기회, 남은 시간
     with st.sidebar:
         st.markdown("### 사이드바 정보")
+        st.markdown(f"- 학교: {st.session_state.school}")
         st.markdown(f"- 현재 점수: {st.session_state.score}점")
         st.markdown(f"- 남은 기회: {'❤️' * st.session_state.lives}")
         st.markdown(f"- 남은 시간: {time_left}초")
 
-    # 공통 상단 정보
+    # 본문 상단 정보
     st.markdown(f"**문제 {idx+1}/{len(problems)}**")
     st.progress(progress)
     st.markdown(f"남은 시간: **{time_left}초** (120초 제한)")
@@ -211,7 +219,7 @@ def show_quiz_interface():
                 st.session_state.lives -= 1
                 st.session_state.history.append(("mul_wrong", elapsed_final, bonus, 0))
 
-            # 다음 문제
+            # 다음 문제 이동
             st.session_state.q_idx += 1
             st.session_state.start_time = time.time()
             st.rerun()
@@ -258,12 +266,12 @@ def show_quiz_interface():
                 st.session_state.lives -= 1
                 st.session_state.history.append(("div_wrong", elapsed_final, bonus, 0))
 
-            # 다음 문제
+            # 다음 문제 이동
             st.session_state.q_idx += 1
             st.session_state.start_time = time.time()
             st.rerun()
 
-    # 제한 시간 만료 시 종료
+    # 제한 시간 만료 시 종료 플래그
     if time_left <= 0:
         st.session_state.finished = True
 
@@ -271,7 +279,7 @@ def show_result():
     """
     퀴즈 종료 후 결과 화면:
     - 최종 점수, 정답 개수, 오답 내역 간단 표시
-    - 구글 시트 저장 안내
+    - 구글 시트에 저장 안내
     - 다시 시작하기 / 순위 보기 버튼
     """
     st.header("🎉 퀴즈 결과")
@@ -283,17 +291,17 @@ def show_result():
     st.subheader("📝 문제별 결과")
     for i, rec in enumerate(st.session_state.history, start=1):
         status, elapsed, bonus, base = rec
-        if "mul_correct" == status:
+        if status == "mul_correct":
             st.markdown(f"{i}. ✅ 곱셈 정답 (문제 점수 {base}, 보너스 {bonus}, 소요시간 {int(elapsed)}초)")
-        elif "mul_wrong" == status:
+        elif status == "mul_wrong":
             st.markdown(f"{i}. ❌ 곱셈 오답 (소요시간 {int(elapsed)}초)")
-        elif "div_correct" == status:
+        elif status == "div_correct":
             st.markdown(f"{i}. ✅ 나눗셈 정답 (문제 점수 {base}, 보너스 {bonus}, 소요시간 {int(elapsed)}초)")
         else:
             st.markdown(f"{i}. ❌ 나눗셈 오답 (소요시간 {int(elapsed)}초)")
 
     if not st.session_state.saved:
-        append_result_to_sheet(st.session_state.name, total_score)
+        append_result_to_sheet(st.session_state.name, st.session_state.school, total_score)
         st.session_state.saved = True
         st.success("✅ 결과가 구글 시트에 저장되었습니다!")
 
@@ -311,7 +319,7 @@ def show_result():
 def show_rank():
     """
     ‘순위 보기’ 화면:
-    - 구글 시트에서 모든 기록을 불러와서 상위 10명(점수 내림차순) 표시
+    - 구글 시트에서 모든 기록을 불러와서 상위 10위(학교 포함) 표시
     """
     st.header("🏆 순위 보기 (Top 10)")
     df = load_rank_data()
@@ -319,9 +327,9 @@ def show_rank():
         st.info("아직 기록이 없습니다.")
     else:
         top10 = df.head(10).copy()
-        top10.index = top10.index + 1
+        top10.index = top10.index + 1  # 1번부터
         top10.reset_index(inplace=True)
-        top10.columns = ["순위", "날짜", "이름", "점수"]
+        top10.columns = ["순위", "날짜", "이름", "학교", "점수"]
         st.table(top10)
 
     if st.button("◀ 뒤로 가기"):
@@ -343,9 +351,8 @@ def reset_quiz_state():
     st.session_state.saved = False
     st.session_state.show_rank = False
 
-
 # ==============================
-# 5) 메인 실행 흐름
+# 4) 메인 실행 흐름
 # ==============================
 def main():
     # 반드시 스크립트 내 첫 번째 Streamlit 호출이어야 합니다.
@@ -355,6 +362,7 @@ def main():
     if "initialized" not in st.session_state:
         st.session_state.initialized = True
         st.session_state.name = ""
+        st.session_state.school = ""
         st.session_state.problems = []
         st.session_state.q_idx = 0
         st.session_state.lives = 5
@@ -385,7 +393,6 @@ def main():
     # 퀴즈 종료 후
     else:
         show_result()
-
 
 if __name__ == "__main__":
     main()
