@@ -23,6 +23,8 @@ if "initialized" not in st.session_state:
     st.session_state.history = []
     st.session_state.show_rank = False
     st.session_state.saved = False
+    # 순위 검색용 입력값을 세션에 미리 등록
+    st.session_state.school_filter_input = ""  # for show_rank()
 
 # ==============================
 # 1) Google Sheets 인증 및 시트 열기
@@ -55,7 +57,7 @@ def append_result_to_sheet(name: str, school: str, score: int):
         now_utc = datetime.datetime.utcnow()
         now_kst = now_utc + datetime.timedelta(hours=9)
         now_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
-        # '이름'과 '학교' 열 순서를 바꿔서 append
+        # '날짜', '학교', '이름', '점수' 순서로 저장
         worksheet.append_row([now_str, school, name, score])
     except Exception as e:
         st.error(f"구글 시트에 결과를 저장하는 도중 오류가 발생했습니다:\n{e}")
@@ -356,23 +358,24 @@ def show_rank():
         top10_students = df.head(10).copy()
         top10_students.index = top10_students.index + 1
         top10_students.reset_index(inplace=True)
-        # reset_index() 후 컬럼이 ["index","날짜","학교","이름","점수"]가 되므로,
-        # 이를 ["순위","날짜","학교","이름","점수"]로 변경
+        # reset_index() 후 컬럼이 ["index","날짜","학교","이름","점수"]
         top10_students.columns = ["순위", "날짜", "학교", "이름", "점수"]
         st.subheader("🔝 전체 학생 Top 10")
         st.table(top10_students)
 
-        # 2) 학교 검색: 입력된 학교명과 검색 버튼 배치
+        # 2) 학교 검색: 입력된 학교명과 검색 버튼을 나란히 배치
         st.markdown("---")
-        col1, col2 = st.columns([3, 1])
+        col1, col2 = st.columns([4, 1])
         with col1:
-            school_filter = st.text_input("▶ 학교 이름으로 검색", value="", key="school_filter_input")
+            # 세션 상태에 저장된 값을 그대로 사용
+            st.text_input("▶ 학교 이름으로 검색", key="school_filter_input")
         with col2:
             search_btn = st.button("검색", key="school_filter_btn")
 
         # “검색” 버튼을 눌렀을 때만 필터 실행
-        if search_btn and school_filter.strip():
-            df_school = df[df["학교"].str.contains(school_filter.strip(), case=False)]
+        if search_btn and st.session_state.school_filter_input.strip():
+            school_filter = st.session_state.school_filter_input.strip()
+            df_school = df[df["학교"].str.contains(school_filter, case=False)]
             if df_school.empty:
                 st.warning(f"'{school_filter}' 학교의 기록이 없습니다.")
             else:
@@ -380,7 +383,6 @@ def show_rank():
                 df_school.index = df_school.index + 1
                 df_school.reset_index(inplace=True)
                 # reset_index() 후 컬럼이 ["index","날짜","학교","이름","점수"]
-                # 이를 ["순위(학교)","날짜","학교","이름","점수"]로 변경
                 df_school.columns = ["순위(학교)", "날짜", "학교", "이름", "점수"]
                 st.subheader(f"🎓 '{school_filter}' 학생 순위")
                 st.table(df_school)
@@ -388,7 +390,6 @@ def show_rank():
         # 3) 학교별 총점 집계 및 상위 5개 학교 순위
         st.markdown("---")
         st.subheader("🏫 학교별 총점 Top 5")
-        # group by '학교', sum '점수'
         school_totals = df.groupby("학교")["점수"].sum().reset_index()
         school_totals.columns = ["학교", "총점"]
         school_totals_sorted = school_totals.sort_values(by="총점", ascending=False).head(5)
@@ -416,6 +417,8 @@ def reset_quiz_state():
     st.session_state.problems = []
     st.session_state.saved = False
     st.session_state.show_rank = False
+    # 학교 검색 입력 초기화
+    st.session_state.school_filter_input = ""
 
 # ==============================
 # 4) 메인 실행 흐름
