@@ -7,27 +7,6 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 
-
-@st.cache_resource(show_spinner=False)
-def get_gspread_client():
-    # === 디버깅용 출력 ===
-    st.write("▶ st.secrets:", st.secrets)  
-    # 혹은
-    # st.write("▶ private_key repr:", repr(st.secrets["gcp_service_account"]["private_key"]))
-    
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    creds_dict = st.secrets["gcp_service_account"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
-    return client
-
-
-
-
-
 # ==============================
 # 1) Google Sheets 인증 및 시트 열기
 # ==============================
@@ -37,6 +16,7 @@ GSHEET_KEY = "17cmgNZiG8vyhQjuSOykoRYcyFyTCzhBd_Z12rChueFU"  # 시트 ID
 
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
+    st.write("▶ st.secrets:", st.secrets) 
     """
     Streamlit secrets.toml에 저장된 서비스 계정 JSON을 이용해
     gspread 클라이언트를 생성하여 반환합니다.
