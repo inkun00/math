@@ -234,7 +234,7 @@ def show_quiz_interface():
         st.session_state.q_idx += 1
         st.session_state.start_time = time.time()
         # 페이지 리로딩 시 Quiz 화면을 다시 보여주도록 함
-        st.experimental_rerun()
+        st.rerun()
 
 def show_result():
     """
@@ -269,7 +269,7 @@ def show_result():
     with col1:
         if st.button("🔄 다시 시작하기"):
             reset_quiz_state()
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         if st.button("📊 순위 보기"):
             st.session_state.show_rank = True
@@ -294,7 +294,7 @@ def show_rank():
     if st.button("◀ 뒤로 가기"):
         st.session_state.show_rank = False
         reset_quiz_state()
-        st.experimental_rerun()
+        st.rerun()
 
 def reset_quiz_state():
     """
