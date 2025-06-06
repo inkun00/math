@@ -201,7 +201,7 @@ def show_quiz_interface():
         # 다음 문제: 인덱스 증가, 타이머 리셋, 즉시 rerun
         st.session_state.q_idx += 1
         st.session_state.start_time = time.time()
-        st.experimental_rerun()
+        st.rerun()
 
     # 제한 시간 만료 시 종료 플래그 설정
     if time_left <= 0:
@@ -238,11 +238,11 @@ def show_result():
     with col1:
         if st.button("🔄 다시 시작하기"):
             reset_quiz_state()
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         if st.button("📊 순위 보기"):
             st.session_state.show_rank = True
-            st.experimental_rerun()
+            st.rerun()
 
 def show_rank():
     """
@@ -263,7 +263,7 @@ def show_rank():
     if st.button("◀ 뒤로 가기"):
         st.session_state.show_rank = False
         reset_quiz_state()
-        st.experimental_rerun()
+        st.rerun()
 
 def reset_quiz_state():
     """
