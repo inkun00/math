@@ -17,7 +17,7 @@ GSHEET_KEY = "17cmgNZiG8vyhQjuSOykoRYcyFyTCzhBd_Z12rChueFU"  # 시트 ID
 
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    st.write("▶ st.secrets:", st.secrets) 
+    
     """
     Streamlit secrets.toml에 저장된 서비스 계정 JSON을 이용해
     gspread 클라이언트를 생성하여 반환합니다.
