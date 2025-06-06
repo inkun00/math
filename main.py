@@ -175,6 +175,7 @@ def show_rules_and_name_input():
     with col2:
         if st.button("순위 보기"):
             st.session_state.show_rank = True
+            st.rerun()
 
 def show_quiz_interface():
     """
@@ -417,8 +418,7 @@ def reset_quiz_state():
     st.session_state.problems = []
     st.session_state.saved = False
     st.session_state.show_rank = False
-    # 학교 검색 입력 초기화
-    st.session_state.school_filter_input = ""
+    # 'school_filter_input' 키는 유지합니다. 필요 시 사용자 입력이 덮어씌워짐.
 
 # ==============================
 # 4) 메인 실행 흐름
