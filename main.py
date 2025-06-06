@@ -349,7 +349,7 @@ def show_rank():
     - 개인별 총점 Top10 (이름+학교 조합별)
     - 학교별 총점 Top5
     - 학생 이름 검색: 입력된 이름으로 모든 매칭된 정보(여러 학교 포함) 출력,
-      각각의 총점, 전체 순위, 학교 내 순위 표시
+      각각의 총점, 전체 순위, 학교 내 순위 표시 (박스 형태로 구분)
     """
     st.header("🏆 순위 보기")
 
@@ -420,16 +420,26 @@ def show_rank():
                 st.warning(f"'{search_name}' 학생의 기록이 없습니다.")
             else:
                 st.markdown(f"**검색 결과: {search_name}**")
-                # 같은 이름이 여러 학교에 있을 수 있으므로, 각 행마다 정보 출력
+                # 같은 이름이 여러 학교에 있을 수 있으므로, 각 행마다 정보 출력 (박스 형태)
                 for _, row in matched.iterrows():
                     school = row["학교"]
                     total_score = row["총점"]
                     overall_rank = int(row["순위"])
                     school_rank = int(row["학교내순위"])
-                    st.markdown(f"- 이름: **{search_name}**, 학교: **{school}**")
-                    st.markdown(f"  - 총점: {total_score}점")
-                    st.markdown(f"  - 전체 순위: {overall_rank}위")
-                    st.markdown(f"  - '{school}' 학교 내 순위: {school_rank}위")
+
+                    # HTML 박스로 감싸서 시각적으로 구분
+                    html = f"""
+                    <div style="border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:5px; background-color:#f9f9f9;">
+                      <ul style="margin:0; padding-left:20px;">
+                        <li><strong>이름:</strong> {search_name}</li>
+                        <li><strong>학교:</strong> {school}</li>
+                        <li><strong>총점:</strong> {total_score}점</li>
+                        <li><strong>전체 순위:</strong> {overall_rank}위</li>
+                        <li><strong>'{school}' 학교 내 순위:</strong> {school_rank}위</li>
+                      </ul>
+                    </div>
+                    """
+                    st.markdown(html, unsafe_allow_html=True)
 
     if st.button("◀ 뒤로 가기"):
         st.session_state.show_rank = False
