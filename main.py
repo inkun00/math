@@ -333,18 +333,52 @@ def show_result():
 def show_rank():
     """
     ‘순위 보기’ 화면:
-    - 구글 시트에 저장된 모든 기록을 불러와서 상위 10위(학교 포함) 표시
+    - 구글 시트에 저장된 모든 기록을 불러와서 상위 10명(학생) 표시
+    - 학교 검색 기능: 입력된 학교에 속한 학생순위만 표시
+    - 학교별 총점 계산 후 상위 5개 학교 순위 출력
     """
-    st.header("🏆 순위 보기 (Top 10)")
-    df = load_rank_data()
+    st.header("🏆 순위 보기 (Top 10 학생)")
+    df = load_rank_data()  # columns: ["날짜", "이름", "학교", "점수"]
+
     if df.empty:
         st.info("아직 기록이 없습니다.")
     else:
-        top10 = df.head(10).copy()
-        top10.index = top10.index + 1  # 1번부터
-        top10.reset_index(inplace=True)
-        top10.columns = ["순위", "날짜", "이름", "학교", "점수"]
-        st.table(top10)
+        # 1) 전체 상위 10명 학생 랭킹
+        top10_students = df.head(10).copy()
+        top10_students.index = top10_students.index + 1
+        top10_students.reset_index(inplace=True)
+        top10_students.columns = ["순위", "날짜", "이름", "학교", "점수"]
+        st.subheader("🔝 전체 학생 Top 10")
+        st.table(top10_students)
+
+        # 2) 학교 검색: 입력된 학교에 속한 학생 순위만 보여주기
+        st.markdown("---")
+        school_filter = st.text_input("▶ 학교 이름으로 검색", "")
+        if school_filter:
+            df_school = df[df["학교"].str.contains(school_filter.strip(), case=False)]
+            if df_school.empty:
+                st.warning(f"'{school_filter}' 학교의 기록이 없습니다.")
+            else:
+                df_school = df_school.copy()
+                df_school.reset_index(drop=True, inplace=True)
+                df_school.index = df_school.index + 1
+                df_school.reset_index(inplace=True)
+                df_school.columns = ["순위(학교)", "날짜", "이름", "학교", "점수"]
+                st.subheader(f"🎓 '{school_filter}' 학생 순위")
+                st.table(df_school)
+
+        # 3) 학교별 총점 집계 및 상위 5개 학교 순위
+        st.markdown("---")
+        st.subheader("🏫 학교별 총점 Top 5")
+        # group by '학교', sum '점수'
+        school_totals = df.groupby("학교")["점수"].sum().reset_index()
+        school_totals.columns = ["학교", "총점"]
+        school_totals_sorted = school_totals.sort_values(by="총점", ascending=False).head(5)
+        school_totals_sorted.reset_index(drop=True, inplace=True)
+        school_totals_sorted.index = school_totals_sorted.index + 1
+        school_totals_sorted.reset_index(inplace=True)
+        school_totals_sorted.columns = ["순위(학교)", "학교", "총점"]
+        st.table(school_totals_sorted)
 
     if st.button("◀ 뒤로 가기"):
         st.session_state.show_rank = False
