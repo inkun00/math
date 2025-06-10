@@ -108,8 +108,8 @@ def show_rules_and_name_input():
         - 총 10문제: 5 곱셈, 5 나눗셈
         - 제한시간 2분, 빠를수록 보너스
         - 오답 시 기회 차감 (총 5회)
-        - 종료 후 구글 시트에 기록 저장
         - ‘순위 보기’로 상위 기록 확인
+        - 도담초 4학년 2반 화이팅!
         """
     )
     st.session_state.school = st.text_input("학교 이름", st.session_state.school)
