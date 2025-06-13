@@ -219,6 +219,11 @@ def show_rank():
         top10.columns = ["순위","날짜","학교","이름","점수"]
         st.subheader("Top10")
         st.table(top10)
+          
+        # groupby 전에 꼭!
+        df["이름"] = df["이름"].str.strip()
+        df["학교"] = df["학교"].str.strip()
+        df = df.dropna(subset=["이름", "학교", "점수"])
 
         # 개인 총점(이름+학교별 합산) Top10
         agg = df.groupby(["이름","학교"])['점수'].sum().reset_index()
