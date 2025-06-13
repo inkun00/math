@@ -23,7 +23,6 @@ if "initialized" not in st.session_state:
     st.session_state.history = []
     st.session_state.show_rank = False
     st.session_state.saved = False
-    # 순위 보기 화면용
     st.session_state.school_filter_input = ""
     st.session_state.student_name_input = ""
 
@@ -44,7 +43,6 @@ def get_gspread_client():
 
 @st.cache_resource(show_spinner=False)
 def get_worksheet():
-    # 워크시트 객체를 캐시하여 open_by_key 호출을 줄입니다
     client = get_gspread_client()
     sh = client.open_by_key(GSHEET_KEY)
     return sh.sheet1
@@ -100,7 +98,6 @@ def generate_problems():
 def show_title():
     st.title("🔢 곱셈·나눗셈 퀴즈 챌린지")
 
-
 def show_rules_and_name_input():
     st.markdown(
         """
@@ -128,7 +125,6 @@ def show_rules_and_name_input():
         if st.button("순위 보기"):
             st.session_state.show_rank = True
             st.rerun()
-
 
 def show_quiz_interface():
     if st.session_state.lives <= 0 or st.session_state.q_idx >= len(st.session_state.problems):
@@ -159,7 +155,6 @@ def show_quiz_interface():
     if rem_time <= 0:
         st.session_state.finished = True
 
-
 def handle_mul(inp, prob, elapsed):
     try:
         ua = int(inp)
@@ -178,7 +173,6 @@ def handle_mul(inp, prob, elapsed):
     st.session_state.q_idx += 1
     st.session_state.start_time = time.time()
     st.rerun()
-
 
 def handle_div(q, r, prob, elapsed):
     try:
@@ -199,7 +193,6 @@ def handle_div(q, r, prob, elapsed):
     st.session_state.start_time = time.time()
     st.rerun()
 
-
 def show_result():
     st.header("🎉 결과")
     total = st.session_state.score
@@ -216,7 +209,6 @@ def show_result():
     with c2:
         if st.button("순위"): st.session_state.show_rank=True; st.rerun()
 
-
 def show_rank():
     st.header("🏆 순위")
     df = load_rank_data()
@@ -227,12 +219,16 @@ def show_rank():
         top10.columns = ["순위","날짜","학교","이름","점수"]
         st.subheader("Top10")
         st.table(top10)
+
+        # 개인 총점(이름+학교별 합산) Top10
         agg = df.groupby(["이름","학교"])['점수'].sum().reset_index()
         agg = agg.sort_values('점수', ascending=False).reset_index(drop=True)
         agg['순위'] = agg.index + 1
         st.markdown("---")
         st.subheader("개인 총점 Top10")
         st.table(agg.head(10)[["순위","이름","학교","점수"]])
+
+        # 학교 총점 Top5
         school_tot = df.groupby('학교')['점수'].sum().reset_index()
         school_tot = school_tot.sort_values('점수', ascending=False).reset_index(drop=True)
         school_tot['순위(학교)'] = school_tot.index + 1
@@ -249,7 +245,6 @@ def show_rank():
                     st.markdown(f"**{r['이름']}({r['학교']}) {r['점수']}점 순위{r['순위']}**")
     if st.button("뒤로"): st.session_state.show_rank=False; reset_quiz_state(); st.rerun()
 
-
 def reset_quiz_state():
     st.session_state.q_idx = 0
     st.session_state.lives = 5
@@ -261,7 +256,6 @@ def reset_quiz_state():
     st.session_state.saved = False
     st.session_state.show_rank = False
 
-
 def main():
     st.set_page_config(page_title="곱셈·나눗셈 퀴즈 챌린지", layout="centered")
     show_title()
@@ -270,7 +264,6 @@ def main():
     elif st.session_state.start_time is None and not st.session_state.finished:
         show_rules_and_name_input()
     elif not st.session_state.finished:
-        # 10초마다 자동 새로고침
         st_autorefresh(interval=10000, limit=None, key="timer")
         show_quiz_interface()
     else:
