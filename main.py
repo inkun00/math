@@ -198,3 +198,96 @@ def handle_div(q, r, prob, elapsed):
         st.session_state.history.append(False)
     st.session_state.q_idx += 1
     st.session_state.start_time = time.time()
+    st.rerun()
+
+# 결과 화면
+
+def show_result():
+    st.header("🎉 결과")
+    total = st.session_state.score
+    corrects = sum(state for state in st.session_state.history)
+    st.markdown(f"**점수: {total}점, 정답 {corrects}/{len(st.session_state.problems)}**")
+    if not st.session_state.saved:
+        append_result_to_sheet(st.session_state.name, st.session_state.school, total)
+        st.session_state.saved = True
+        st.success("구글 시트에 저장됨")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("다시"): reset_quiz_state(); st.rerun()
+    with c2:
+        if st.button("순위"): st.session_state.show_rank=True; reset_quiz_state(); st.rerun()
+
+# 순위 화면
+
+def show_rank():
+    st.header("🏆 순위")
+    df = load_rank_data()
+    if df.empty:
+        st.info("기록 없음")
+    else:
+        # 학교 선택 콤보박스
+        schools = df['학교'].dropna().unique().tolist()
+        schools.sort()
+        selected_school = st.selectbox("학교 선택", ['전체'] + schools)
+        # 특정 학교 선택 시에만 학생별 총점 표시
+        if selected_school != '전체':
+            sub = df[df['학교'] == selected_school]
+            agg = sub.groupby(['이름','학교'])['점수'].sum().reset_index()
+            agg = agg.sort_values('점수', ascending=False).reset_index(drop=True)
+            agg['순위'] = agg.index + 1
+            st.subheader(f"{selected_school} 학생별 총점")
+            st.table(agg[['순위','이름','점수']])
+        st.markdown("---")
+        # Top10 기록
+        top10 = df.head(10).reset_index()
+        top10.columns = ["순위","날짜","학교","이름","점수"]
+        st.subheader("Top10")
+        st.table(top10)
+        # 개인 총점 Top10
+        df['이름'] = df['이름'].str.strip()
+        df['학교'] = df['학교'].str.strip()
+        df = df.dropna(subset=["이름", "학교", "점수"])
+        agg_tot = df.groupby(["이름","학교"])['점수'].sum().reset_index()
+        agg_tot = agg_tot.sort_values('점수', ascending=False).reset_index(drop=True)
+        agg_tot['순위'] = agg_tot.index + 1
+        st.markdown("---")
+        st.subheader("개인 총점 Top10")
+        st.table(agg_tot.head(10)[["순위","이름","학교","점수"]])
+        # 학교별 총점 Top5
+        school_tot = df.groupby('학교')['점수'].sum().reset_index()
+        school_tot = school_tot.sort_values('점수', ascending=False).reset_index(drop=True)
+        school_tot['순위(학교)'] = school_tot.index + 1
+        st.markdown("---")
+        st.subheader("학교별 총점 Top5")
+        st.table(school_tot.head(5)[["순위(학교)","학교","점수"]])
+
+# 상태 초기화 함수
+
+def reset_quiz_state():
+    st.session_state.q_idx = 0
+    st.session_state.lives = 5
+    st.session_state.score = 0
+    st.session_state.start_time = None
+    st.session_state.finished = False
+    st.session_state.history = []
+    st.session_state.problems = []
+    st.session_state.saved = False
+    st.session_state.show_rank = False
+
+# 메인 함수
+
+def main():
+    st.set_page_config(page_title="곱셈·나눗셈 퀴즈 챌린지", layout="centered")
+    show_title()
+    if st.session_state.show_rank:
+        show_rank()
+    elif st.session_state.start_time is None and not st.session_state.finished:
+        show_rules_and_name_input()
+    elif not st.session_state.finished:
+        st_autorefresh(interval=10000, limit=None, key="timer")
+        show_quiz_interface()
+    else:
+        show_result()
+
+if __name__ == "__main__":
+    main()
