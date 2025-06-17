@@ -229,7 +229,7 @@ def show_rank():
         schools = df['학교'].dropna().unique().tolist()
         schools.sort()
         selected_school = st.selectbox("학교 선택", ['전체'] + schools)
-        # 특정 학교 선택 시에만 학생별 총점 표시
+        # 특정 학교 선택 시 학생별 총점 표시
         if selected_school != '전체':
             sub = df[df['학교'] == selected_school]
             agg = sub.groupby(['이름','학교'])['점수'].sum().reset_index()
@@ -238,28 +238,19 @@ def show_rank():
             st.subheader(f"{selected_school} 학생별 총점")
             st.table(agg[['순위','이름','점수']])
         st.markdown("---")
-        # Top10 기록
-        top10 = df.head(10).reset_index()
-        top10.columns = ["순위","날짜","학교","이름","점수"]
-        st.subheader("Top10")
-        st.table(top10)
-        # 개인 총점 Top10
-        df['이름'] = df['이름'].str.strip()
-        df['학교'] = df['학교'].str.strip()
-        df = df.dropna(subset=["이름", "학교", "점수"])
-        agg_tot = df.groupby(["이름","학교"])['점수'].sum().reset_index()
-        agg_tot = agg_tot.sort_values('점수', ascending=False).reset_index(drop=True)
-        agg_tot['순위'] = agg_tot.index + 1
-        st.markdown("---")
-        st.subheader("개인 총점 Top10")
-        st.table(agg_tot.head(10)[["순위","이름","학교","점수"]])
         # 학교별 총점 Top5
         school_tot = df.groupby('학교')['점수'].sum().reset_index()
         school_tot = school_tot.sort_values('점수', ascending=False).reset_index(drop=True)
         school_tot['순위(학교)'] = school_tot.index + 1
-        st.markdown("---")
         st.subheader("학교별 총점 Top5")
         st.table(school_tot.head(5)[["순위(학교)","학교","점수"]])
+        # 특정 학교 선택 시 전체 시도 표시
+        if selected_school != '전체':
+            st.markdown("---")
+            st.subheader(f"{selected_school} 전체 시도")
+            attempts = df[df['학교'] == selected_school][['날짜','이름','점수']]
+            attempts = attempts.reset_index(drop=True)
+            st.table(attempts)
 
 # 상태 초기화 함수
 
