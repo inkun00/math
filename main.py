@@ -94,9 +94,10 @@ def generate_problems():
 # ==============================
 # 5) UI 구성 함수
 # ==============================
-
 def show_title():
     st.title("🔢 곱셈·나눗셈 퀴즈 챌린지")
+
+# 규칙 및 시작/순위 화면
 
 def show_rules_and_name_input():
     st.markdown(
@@ -125,6 +126,8 @@ def show_rules_and_name_input():
         if st.button("순위 보기"):
             st.session_state.show_rank = True
             st.rerun()
+
+# 퀴즈 화면
 
 def show_quiz_interface():
     if st.session_state.lives <= 0 or st.session_state.q_idx >= len(st.session_state.problems):
@@ -155,6 +158,8 @@ def show_quiz_interface():
     if rem_time <= 0:
         st.session_state.finished = True
 
+# 곱셈 처리
+
 def handle_mul(inp, prob, elapsed):
     try:
         ua = int(inp)
@@ -173,6 +178,8 @@ def handle_mul(inp, prob, elapsed):
     st.session_state.q_idx += 1
     st.session_state.start_time = time.time()
     st.rerun()
+
+# 나눗셈 처리
 
 def handle_div(q, r, prob, elapsed):
     try:
@@ -193,6 +200,8 @@ def handle_div(q, r, prob, elapsed):
     st.session_state.start_time = time.time()
     st.rerun()
 
+# 결과 화면
+
 def show_result():
     st.header("🎉 결과")
     total = st.session_state.score
@@ -207,7 +216,9 @@ def show_result():
     with c1:
         if st.button("다시"): reset_quiz_state(); st.rerun()
     with c2:
-        if st.button("순위"): st.session_state.show_rank=True; st.rerun()
+        if st.button("순위"): st.session_state.show_rank=True; reset_quiz_state(); st.rerun()
+
+# 순위 화면 + 학교 콤보박스 및 학생별 총점
 
 def show_rank():
     st.header("🏆 순위")
@@ -215,23 +226,38 @@ def show_rank():
     if df.empty:
         st.info("기록 없음")
     else:
+        # 학교 선택 콤보박스
+        schools = df['학교'].dropna().unique().tolist()
+        schools.sort()
+        selected_school = st.selectbox("학교 선택", ['전체'] + schools)
+        if selected_school != '전체':
+            sub = df[df['학교'] == selected_school]
+        else:
+            sub = df
+        # 학생별 총점
+        agg = sub.groupby(['이름','학교'])['점수'].sum().reset_index()
+        agg = agg.sort_values('점수', ascending=False).reset_index(drop=True)
+        agg['순위'] = agg.index + 1
+        st.subheader(f"{selected_school} 학생별 총점")
+        st.table(agg[['순위','이름','점수']])
+
+        st.markdown("---")
+        # 기존 Top10, 개인, 학교별 순위 보기
         top10 = df.head(10).reset_index()
         top10.columns = ["순위","날짜","학교","이름","점수"]
         st.subheader("Top10")
         st.table(top10)
-          
-        # groupby 전에 꼭!
-        df["이름"] = df["이름"].str.strip()
-        df["학교"] = df["학교"].str.strip()
-        df = df.dropna(subset=["이름", "학교", "점수"])
 
-        # 개인 총점(이름+학교별 합산) Top10
-        agg = df.groupby(["이름","학교"])['점수'].sum().reset_index()
-        agg = agg.sort_values('점수', ascending=False).reset_index(drop=True)
-        agg['순위'] = agg.index + 1
+        # 개인 총점 Top10
+        df['이름'] = df['이름'].str.strip()
+        df['학교'] = df['학교'].str.strip()
+        df = df.dropna(subset=["이름", "학교", "점수"])
+        agg_tot = df.groupby(["이름","학교"])['점수'].sum().reset_index()
+        agg_tot = agg_tot.sort_values('점수', ascending=False).reset_index(drop=True)
+        agg_tot['순위'] = agg_tot.index + 1
         st.markdown("---")
         st.subheader("개인 총점 Top10")
-        st.table(agg.head(10)[["순위","이름","학교","점수"]])
+        st.table(agg_tot.head(10)[["순위","이름","학교","점수"]])
 
         # 학교 총점 Top5
         school_tot = df.groupby('학교')['점수'].sum().reset_index()
@@ -240,15 +266,17 @@ def show_rank():
         st.markdown("---")
         st.subheader("학교별 총점 Top5")
         st.table(school_tot.head(5)[["순위(학교)","학교","점수"]])
-        st.markdown("---")
+
         name_input = st.text_input("검색 이름", key="student_name_input")
         if st.button("검색", key="search_btn") and name_input.strip():
-            m = agg[agg['이름'] == name_input]
+            m = agg_tot[agg_tot['이름'] == name_input]
             if m.empty: st.warning("기록없음")
             else:
                 for _, r in m.iterrows():
                     st.markdown(f"**{r['이름']}({r['학교']}) {r['점수']}점 순위{r['순위']}**")
     if st.button("뒤로"): st.session_state.show_rank=False; reset_quiz_state(); st.rerun()
+
+# 상태 초기화 함수
 
 def reset_quiz_state():
     st.session_state.q_idx = 0
@@ -260,6 +288,8 @@ def reset_quiz_state():
     st.session_state.problems = []
     st.session_state.saved = False
     st.session_state.show_rank = False
+
+# 메인 함수
 
 def main():
     st.set_page_config(page_title="곱셈·나눗셈 퀴즈 챌린지", layout="centered")
