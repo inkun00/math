@@ -200,7 +200,6 @@ def show_result():
     total = st.session_state.score
     corrects = sum(state for state in st.session_state.history)
     st.markdown(f"**점수: {total}점, 정답 {corrects}/{len(st.session_state.problems)}**")
-    # 한 번만 저장
     if not st.session_state.saved:
         append_result_to_sheet(st.session_state.name, st.session_state.school, total)
         st.session_state.saved = True
@@ -217,51 +216,66 @@ def show_rank():
     df = load_rank_data()
     if df.empty:
         st.info("기록 없음")
+        if st.button("뒤로"): 
+            st.session_state.show_rank = False
+            reset_quiz_state()
+            st.rerun()
+        return
+
+    # Top10 전체 기록
+    top10 = df.head(10).reset_index()
+    top10.columns = ["순위","날짜","학교","이름","점수"]
+    st.subheader("Top10")
+    st.table(top10)
+
+    # 데이터 전처리
+    df["이름"] = df["이름"].str.strip()
+    df["학교"] = df["학교"].str.strip()
+    df = df.dropna(subset=["이름","학교","점수"])
+
+    # 개인 총점 Top10
+    agg = df.groupby(["이름","학교"])['점수'].sum().reset_index()
+    agg = agg.sort_values('점수', ascending=False).reset_index(drop=True)
+    agg['순위'] = agg.index + 1
+    st.markdown("---")
+    st.subheader("개인 총점 Top10")
+    st.table(agg.head(10)[["순위","이름","학교","점수"]])
+
+    # 학교별 총점 Top5
+    school_tot = df.groupby('학교')['점수'].sum().reset_index()
+    school_tot = school_tot.sort_values('점수', ascending=False).reset_index(drop=True)
+    school_tot['순위(학교)'] = school_tot.index + 1
+    st.markdown("---")
+    st.subheader("학교별 총점 Top5")
+    st.table(school_tot.head(5)[["순위(학교)","학교","점수"]])
+
+    # 학교 선택 콤보박스
+    st.markdown("---")
+    st.subheader("학교별 학생 순위 및 시도 기록")
+    schools = school_tot['학교'].tolist()
+    selected_school = st.selectbox("학교 선택", schools, key="school_select")
+    school_students = agg[agg['학교'] == selected_school][['순위','이름','점수']]
+    if not school_students.empty:
+        st.table(school_students.reset_index(drop=True))
+        st.markdown(f"**{selected_school} 학교 전체 시도 기록**")
+        attempts = df[df['학교'] == selected_school][['날짜','이름','점수']]
+        attempts = attempts.sort_values(by='날짜')
+        st.table(attempts.reset_index(drop=True))
     else:
-        # Top10 전체
-        top10 = df.head(10).reset_index()
-        top10.columns = ["순위","날짜","학교","이름","점수"]
-        st.subheader("Top10")
-        st.table(top10)
-        
-        # 정리 및 전처리
-        df["이름"] = df["이름"].str.strip()
-        df["학교"] = df["학교"].str.strip()
-        df = df.dropna(subset=["이름","학교","점수"])
-        
-        # 개인 총점(이름+학교별 합산) Top10
-        agg = df.groupby(["이름","학교"])['점수'].sum().reset_index()
-        agg = agg.sort_values('점수', ascending=False).reset_index(drop=True)
-        agg['순위'] = agg.index + 1
-        st.markdown("---")
-        st.subheader("개인 총점 Top10")
-        st.table(agg.head(10)[["순위","이름","학교","점수"]])
-        
-        # 학교 총점 Top5
-        school_tot = df.groupby('학교')['점수'].sum().reset_index()
-        school_tot = school_tot.sort_values('점수', ascending=False).reset_index(drop=True)
-        school_tot['순위(학교)'] = school_tot.index + 1
-        st.markdown("---")
-        st.subheader("학교별 총점 Top5")
-        st.table(school_tot.head(5)[["순위(학교)","학교","점수"]])
-        
-        # 추가: 학교 선택 박스 및 해당 학교 학생 순위 & 시도 기록
-        st.markdown("---")
-        st.subheader("학교별 학생 순위")
-        schools = school_tot['학교'].tolist()
-        selected_school = st.selectbox("학교 선택", schools, key="school_select")
-        school_students = agg[agg['학교'] == selected_school]
-        if not school_students.empty:
-            school_students = school_students[['순위','이름','점수']].reset_index(drop=True)
-            st.table(school_students)
-            # 해당 학교 전체 시도 기록
-            st.markdown(f"**{selected_school} 학교 전체 시도 기록**")
-            attempts = df[df['학교'] == selected_school][['날짜','이름','점수']]
-            attempts = attempts.sort_values(by='날짜')
-            st.table(attempts)
+        st.info("선택한 학교의 기록이 없습니다.")
+
+    # 이름 검색 기능 복원
+    st.markdown("---")
+    st.subheader("개인 기록 검색")
+    name_search = st.text_input("검색 이름", key="name_search_input")
+    if st.button("검색", key="name_search_btn") and name_search.strip():
+        m = agg[agg['이름'] == name_search]
+        if m.empty:
+            st.warning("기록없음")
         else:
-            st.info("선택한 학교의 기록이 없습니다.")
-        
+            for _, r in m.iterrows():
+                st.markdown(f"**{r['이름']} ({r['학교']}) - 총점: {r['점수']}점 (순위 {r['순위']})**")
+
     if st.button("뒤로"): 
         st.session_state.show_rank = False
         reset_quiz_state()
