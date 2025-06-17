@@ -6,6 +6,7 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from streamlit_autorefresh import st_autorefresh
+
 # ==============================
 # 전역: 세션 상태 초기화
 # ==============================
@@ -24,6 +25,7 @@ if "initialized" not in st.session_state:
     st.session_state.saved = False
     st.session_state.school_filter_input = ""
     st.session_state.student_name_input = ""
+
 # ==============================
 # 1) Google Sheets 인증 및 시트 열기 캐시
 # ==============================
@@ -37,11 +39,13 @@ def get_gspread_client():
     creds_dict = st.secrets["gcp_service_account"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
+
 @st.cache_resource(show_spinner=False)
 def get_worksheet():
     client = get_gspread_client()
     sh = client.open_by_key(GSHEET_KEY)
     return sh.sheet1
+
 # ==============================
 # 2) 결과 저장(append) 함수
 # ==============================
@@ -53,6 +57,7 @@ def append_result_to_sheet(name: str, school: str, score: int):
         ws.append_row([ts, school, name, score])
     except Exception as e:
         st.error(f"구글 시트에 결과 저장 실패: {e}")
+
 # ==============================
 # 3) 캐시 적용된 데이터 로드 (쿼터 방지)
 # ==============================
@@ -69,6 +74,7 @@ def load_rank_data():
     except Exception as e:
         st.error(f"구글 시트 데이터 로드 실패: {e}")
         return pd.DataFrame(columns=["날짜","학교","이름","점수"])
+
 # ==============================
 # 4) 문제 생성
 # ==============================
@@ -83,11 +89,13 @@ def generate_problems():
                       "quotient":a//b,"remainder":a%b})
     random.shuffle(probs)
     return probs
+
 # ==============================
 # 5) UI 구성 함수
 # ==============================
 def show_title():
     st.title("🔢 곱셈·나눗셈 퀴즈 챌린지")
+
 def show_rules_and_name_input():
     st.markdown(
         """
@@ -115,6 +123,8 @@ def show_rules_and_name_input():
         if st.button("순위 보기"):
             st.session_state.show_rank = True
             st.rerun()
+
+
 def show_quiz_interface():
     if st.session_state.lives <= 0 or st.session_state.q_idx >= len(st.session_state.problems):
         st.session_state.finished = True
@@ -143,6 +153,8 @@ def show_quiz_interface():
             handle_div(q, r, prob, elapsed)
     if rem_time <= 0:
         st.session_state.finished = True
+
+
 def handle_mul(inp, prob, elapsed):
     try:
         ua = int(inp)
@@ -161,6 +173,8 @@ def handle_mul(inp, prob, elapsed):
     st.session_state.q_idx += 1
     st.session_state.start_time = time.time()
     st.rerun()
+
+
 def handle_div(q, r, prob, elapsed):
     try:
         uq, ur = int(q), int(r)
@@ -179,6 +193,8 @@ def handle_div(q, r, prob, elapsed):
     st.session_state.q_idx += 1
     st.session_state.start_time = time.time()
     st.rerun()
+
+
 def show_result():
     st.header("🎉 결과")
     total = st.session_state.score
@@ -194,21 +210,25 @@ def show_result():
         if st.button("다시"): reset_quiz_state(); st.rerun()
     with c2:
         if st.button("순위"): st.session_state.show_rank=True; st.rerun()
+
+
 def show_rank():
     st.header("🏆 순위")
     df = load_rank_data()
     if df.empty:
         st.info("기록 없음")
     else:
+        # Top10 전체
         top10 = df.head(10).reset_index()
         top10.columns = ["순위","날짜","학교","이름","점수"]
         st.subheader("Top10")
         st.table(top10)
-          
-        # groupby 전에 꼭!
+        
+        # 정리 및 전처리
         df["이름"] = df["이름"].str.strip()
         df["학교"] = df["학교"].str.strip()
-        df = df.dropna(subset=["이름", "학교", "점수"])
+        df = df.dropna(subset=["이름","학교","점수"])
+        
         # 개인 총점(이름+학교별 합산) Top10
         agg = df.groupby(["이름","학교"])['점수'].sum().reset_index()
         agg = agg.sort_values('점수', ascending=False).reset_index(drop=True)
@@ -216,6 +236,7 @@ def show_rank():
         st.markdown("---")
         st.subheader("개인 총점 Top10")
         st.table(agg.head(10)[["순위","이름","학교","점수"]])
+        
         # 학교 총점 Top5
         school_tot = df.groupby('학교')['점수'].sum().reset_index()
         school_tot = school_tot.sort_values('점수', ascending=False).reset_index(drop=True)
@@ -223,15 +244,30 @@ def show_rank():
         st.markdown("---")
         st.subheader("학교별 총점 Top5")
         st.table(school_tot.head(5)[["순위(학교)","학교","점수"]])
+        
+        # 추가: 학교 선택 박스 및 해당 학교 학생 순위 & 시도 기록
         st.markdown("---")
-        name_input = st.text_input("검색 이름", key="student_name_input")
-        if st.button("검색", key="search_btn") and name_input.strip():
-            m = agg[agg['이름'] == name_input]
-            if m.empty: st.warning("기록없음")
-            else:
-                for _, r in m.iterrows():
-                    st.markdown(f"**{r['이름']}({r['학교']}) {r['점수']}점 순위{r['순위']}**")
-    if st.button("뒤로"): st.session_state.show_rank=False; reset_quiz_state(); st.rerun()
+        st.subheader("학교별 학생 순위")
+        schools = school_tot['학교'].tolist()
+        selected_school = st.selectbox("학교 선택", schools, key="school_select")
+        school_students = agg[agg['학교'] == selected_school]
+        if not school_students.empty:
+            school_students = school_students[['순위','이름','점수']].reset_index(drop=True)
+            st.table(school_students)
+            # 해당 학교 전체 시도 기록
+            st.markdown(f"**{selected_school} 학교 전체 시도 기록**")
+            attempts = df[df['학교'] == selected_school][['날짜','이름','점수']]
+            attempts = attempts.sort_values(by='날짜')
+            st.table(attempts)
+        else:
+            st.info("선택한 학교의 기록이 없습니다.")
+        
+    if st.button("뒤로"): 
+        st.session_state.show_rank = False
+        reset_quiz_state()
+        st.rerun()
+
+
 def reset_quiz_state():
     st.session_state.q_idx = 0
     st.session_state.lives = 5
@@ -242,6 +278,8 @@ def reset_quiz_state():
     st.session_state.problems = []
     st.session_state.saved = False
     st.session_state.show_rank = False
+
+
 def main():
     st.set_page_config(page_title="곱셈·나눗셈 퀴즈 챌린지", layout="centered")
     show_title()
@@ -254,5 +292,6 @@ def main():
         show_quiz_interface()
     else:
         show_result()
+
 if __name__ == "__main__":
     main()
