@@ -30,6 +30,7 @@ if "initialized" not in st.session_state:
 # 1) Google Sheets 인증 및 시트 열기 캐시
 # ==============================
 GSHEET_KEY = "17cmgNZiG8vyhQjuSOykoRYcyFyTCzhBd_Z12rChueFU"
+
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
     scope = [
@@ -47,13 +48,21 @@ def get_worksheet():
     return sh.sheet1
 
 # ==============================
-# 2) 결과 저장(append) 함수
+# 2) 결과 저장(append) 함수 (중복 방지 추가)
 # ==============================
 def append_result_to_sheet(name: str, school: str, score: int):
     ws = get_worksheet()
     try:
+        # 현재 KST 시간
         now_kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
         ts = now_kst.strftime("%Y-%m-%d %H:%M:%S")
+        # 중복 방지를 위해 마지막 행과 비교
+        all_rows = ws.get_all_values()
+        if len(all_rows) > 1:
+            last = all_rows[-1]
+            # school: 열 인덱스 1, name: 2, score: 3
+            if last[1] == school and last[2] == name and last[3] == str(score):
+                return
         ws.append_row([ts, school, name, score])
     except Exception as e:
         st.error(f"구글 시트에 결과 저장 실패: {e}")
@@ -124,7 +133,6 @@ def show_rules_and_name_input():
             st.session_state.show_rank = True
             st.rerun()
 
-
 def show_quiz_interface():
     if st.session_state.lives <= 0 or st.session_state.q_idx >= len(st.session_state.problems):
         st.session_state.finished = True
@@ -154,7 +162,6 @@ def show_quiz_interface():
     if rem_time <= 0:
         st.session_state.finished = True
 
-
 def handle_mul(inp, prob, elapsed):
     try:
         ua = int(inp)
@@ -173,7 +180,6 @@ def handle_mul(inp, prob, elapsed):
     st.session_state.q_idx += 1
     st.session_state.start_time = time.time()
     st.rerun()
-
 
 def handle_div(q, r, prob, elapsed):
     try:
@@ -194,7 +200,6 @@ def handle_div(q, r, prob, elapsed):
     st.session_state.start_time = time.time()
     st.rerun()
 
-
 def show_result():
     st.header("🎉 결과")
     total = st.session_state.score
@@ -210,13 +215,12 @@ def show_result():
     with c2:
         if st.button("순위"): st.session_state.show_rank=True; st.rerun()
 
-
 def show_rank():
     st.header("🏆 순위")
     df = load_rank_data()
     if df.empty:
         st.info("기록 없음")
-        if st.button("뒤로"): 
+        if st.button("뒤로"):
             st.session_state.show_rank = False
             reset_quiz_state()
             st.rerun()
@@ -276,11 +280,10 @@ def show_rank():
             for _, r in m.iterrows():
                 st.markdown(f"**{r['이름']} ({r['학교']}) - 총점: {r['점수']}점 (순위 {r['순위']})**")
 
-    if st.button("뒤로"): 
+    if st.button("뒤로"):
         st.session_state.show_rank = False
         reset_quiz_state()
         st.rerun()
-
 
 def reset_quiz_state():
     st.session_state.q_idx = 0
@@ -292,7 +295,6 @@ def reset_quiz_state():
     st.session_state.problems = []
     st.session_state.saved = False
     st.session_state.show_rank = False
-
 
 def main():
     st.set_page_config(page_title="곱셈·나눗셈 퀴즈 챌린지", layout="centered")
