@@ -1,44 +1,40 @@
-import streamlit as st
+import json
 import time
 import random
 import datetime
+
+import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from google.cloud import secretmanager
+from google.oauth2 import service_account
 from streamlit_autorefresh import st_autorefresh
 
 # ==============================
-# 전역: 세션 상태 초기화
+# 0) Secret Manager에서 서비스 계정 키 로드
 # ==============================
-if "initialized" not in st.session_state:
-    st.session_state.initialized = True
-    st.session_state.name = ""
-    st.session_state.school = ""
-    st.session_state.problems = []
-    st.session_state.q_idx = 0
-    st.session_state.lives = 5
-    st.session_state.score = 0
-    st.session_state.start_time = None
-    st.session_state.finished = False
-    st.session_state.history = []
-    st.session_state.show_rank = False
-    st.session_state.saved = False
-    st.session_state.school_filter_input = ""
-    st.session_state.student_name_input = ""
+@st.cache_resource(show_spinner=False)
+def load_service_account_info():
+    sm_client = secretmanager.SecretManagerServiceClient()
+    # TODO: PROJECT_ID와 Secret 이름을 실제 값으로 바꿔주세요
+    secret_name = "projects/PROJECT_ID/secrets/mathquiz-key/versions/latest"
+    resp = sm_client.access_secret_version(name=secret_name)
+    payload = resp.payload.data.decode("utf-8")
+    return json.loads(payload)
 
 # ==============================
-# 1) Google Sheets 인증 및 시트 열기 캐시
+# 1) GSpread 클라이언트 생성 (Secret Manager 자격증명 사용)
 # ==============================
-GSHEET_KEY = "17cmgNZiG8vyhQjuSOykoRYcyFyTCzhBd_Z12rChueFU"
-
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
+    info = load_service_account_info()
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds_dict = st.secrets["gcp_service_account"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    # oauth2client용으로 wrapping
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(info, scope)
     return gspread.authorize(creds)
 
 @st.cache_resource(show_spinner=False)
@@ -48,19 +44,22 @@ def get_worksheet():
     return sh.sheet1
 
 # ==============================
-# 2) 결과 저장(append) 함수 (중복 방지 추가)
+# 설정값
+# ==============================
+GSHEET_KEY = "17cmgNZiG8vyhQjuSOykoRYcyFyTCzhBd_Z12rChueFU"
+
+# ==============================
+# 2) 결과 저장(append) 함수 (중복 방지 포함)
 # ==============================
 def append_result_to_sheet(name: str, school: str, score: int):
     ws = get_worksheet()
     try:
-        # 현재 KST 시간
         now_kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
         ts = now_kst.strftime("%Y-%m-%d %H:%M:%S")
-        # 중복 방지를 위해 마지막 행과 비교
         all_rows = ws.get_all_values()
         if len(all_rows) > 1:
             last = all_rows[-1]
-            # school: 열 인덱스 1, name: 2, score: 3
+            # school: idx1, name: idx2, score: idx3
             if last[1] == school and last[2] == name and last[3] == str(score):
                 return
         ws.append_row([ts, school, name, score])
@@ -68,7 +67,7 @@ def append_result_to_sheet(name: str, school: str, score: int):
         st.error(f"구글 시트에 결과 저장 실패: {e}")
 
 # ==============================
-# 3) 캐시 적용된 데이터 로드 (쿼터 방지)
+# 3) 랭크 데이터 로드 (캐시)
 # ==============================
 @st.cache_data(ttl=60, show_spinner=False)
 def load_rank_data():
@@ -100,7 +99,7 @@ def generate_problems():
     return probs
 
 # ==============================
-# 5) UI 구성 함수
+# 5) UI 구성
 # ==============================
 def show_title():
     st.title("🔢 곱셈·나눗셈 퀴즈 챌린지")
@@ -203,7 +202,7 @@ def handle_div(q, r, prob, elapsed):
 def show_result():
     st.header("🎉 결과")
     total = st.session_state.score
-    corrects = sum(state for state in st.session_state.history)
+    corrects = sum(st.session_state.history)
     st.markdown(f"**점수: {total}점, 정답 {corrects}/{len(st.session_state.problems)}**")
     if not st.session_state.saved:
         append_result_to_sheet(st.session_state.name, st.session_state.school, total)
@@ -211,9 +210,13 @@ def show_result():
         st.success("구글 시트에 저장됨")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("다시"): reset_quiz_state(); st.rerun()
+        if st.button("다시"):
+            reset_quiz_state()
+            st.rerun()
     with c2:
-        if st.button("순위"): st.session_state.show_rank=True; st.rerun()
+        if st.button("순위"):
+            st.session_state.show_rank = True
+            st.rerun()
 
 def show_rank():
     st.header("🏆 순위")
@@ -226,59 +229,62 @@ def show_rank():
             st.rerun()
         return
 
-    # Top10 전체 기록
-    top10 = df.head(10).reset_index()
-    top10.columns = ["순위","날짜","학교","이름","점수"]
+    # Top10 전체
+    top10 = df.head(10).reset_index(drop=True)
+    top10.index += 1
+    top10.columns = ["날짜","학교","이름","점수"]
     st.subheader("Top10")
     st.table(top10)
 
-    # 데이터 전처리
+    # 개인 총점
     df["이름"] = df["이름"].str.strip()
     df["학교"] = df["학교"].str.strip()
     df = df.dropna(subset=["이름","학교","점수"])
-
-    # 개인 총점 Top10
-    agg = df.groupby(["이름","학교"])['점수'].sum().reset_index()
-    agg = agg.sort_values('점수', ascending=False).reset_index(drop=True)
-    agg['순위'] = agg.index + 1
+    agg = df.groupby(["이름","학교"])["점수"].sum().reset_index()
+    agg = agg.sort_values("점수", ascending=False).reset_index(drop=True)
+    agg.index += 1
+    agg.rename(columns={"점수":"총점"}, inplace=True)
     st.markdown("---")
     st.subheader("개인 총점 Top10")
-    st.table(agg.head(10)[["순위","이름","학교","점수"]])
+    st.table(agg.head(10))
 
-    # 학교별 총점 Top5
-    school_tot = df.groupby('학교')['점수'].sum().reset_index()
-    school_tot = school_tot.sort_values('점수', ascending=False).reset_index(drop=True)
-    school_tot['순위(학교)'] = school_tot.index + 1
+    # 학교별 총점
+    school_tot = df.groupby("학교")["점수"].sum().reset_index()
+    school_tot = school_tot.sort_values("점수", ascending=False).reset_index(drop=True)
+    school_tot.index += 1
+    school_tot.rename(columns={"점수":"총점"}, inplace=True)
     st.markdown("---")
     st.subheader("학교별 총점 Top5")
-    st.table(school_tot.head(5)[["순위(학교)","학교","점수"]])
+    st.table(school_tot.head(5))
 
     # 학교 선택 콤보박스
     st.markdown("---")
     st.subheader("학교별 학생 순위 및 시도 기록")
-    schools = school_tot['학교'].tolist()
-    selected_school = st.selectbox("학교 선택", schools, key="school_select")
-    school_students = agg[agg['학교'] == selected_school][['순위','이름','점수']]
-    if not school_students.empty:
-        st.table(school_students.reset_index(drop=True))
-        st.markdown(f"**{selected_school} 학교 전체 시도 기록**")
-        attempts = df[df['학교'] == selected_school][['날짜','이름','점수']]
-        attempts = attempts.sort_values(by='날짜')
-        st.table(attempts.reset_index(drop=True))
+    schools = school_tot.index.to_list()  # just to keep consistency
+    selected = st.selectbox("학교 선택", options=school_tot.index, format_func=lambda i: school_tot.loc[i-1, "학교"])
+    # 선택된 학교 filter
+    sel_name = school_tot.loc[selected-1, "학교"]
+    students = agg[agg["학교"] == sel_name].reset_index(drop=True)
+    if not students.empty:
+        students.index += 1
+        st.table(students)
+        st.markdown(f"**{sel_name} 학교 전체 시도 기록**")
+        att = df[df["학교"] == sel_name][["날짜","이름","점수"]].sort_values("날짜")
+        st.table(att.reset_index(drop=True))
     else:
         st.info("선택한 학교의 기록이 없습니다.")
 
-    # 이름 검색 기능 복원
+    # 개인 검색
     st.markdown("---")
     st.subheader("개인 기록 검색")
-    name_search = st.text_input("검색 이름", key="name_search_input")
-    if st.button("검색", key="name_search_btn") and name_search.strip():
-        m = agg[agg['이름'] == name_search]
+    name_search = st.text_input("검색 이름")
+    if st.button("검색") and name_search.strip():
+        m = agg[agg["이름"] == name_search]
         if m.empty:
             st.warning("기록없음")
         else:
-            for _, r in m.iterrows():
-                st.markdown(f"**{r['이름']} ({r['학교']}) - 총점: {r['점수']}점 (순위 {r['순위']})**")
+            for idx, row in m.iterrows():
+                st.markdown(f"**{row['이름']} ({row['학교']}) - 총점 {row['총점']}점 (순위 {idx+1})**")
 
     if st.button("뒤로"):
         st.session_state.show_rank = False
@@ -298,6 +304,8 @@ def reset_quiz_state():
 
 def main():
     st.set_page_config(page_title="곱셈·나눗셈 퀴즈 챌린지", layout="centered")
+    if "initialized" not in st.session_state:
+        st.session_state.initialized = True
     show_title()
     if st.session_state.show_rank:
         show_rank()
