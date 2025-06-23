@@ -1,5 +1,5 @@
 # 1) 베이스 이미지로 슬림한 Python 사용
-FROM python:3.9-slim
+FROM python:3.13
 
 # 2) 작업 디렉터리 설정
 WORKDIR /app
