@@ -1,3 +1,4 @@
+import os
 import json
 import time
 import random
@@ -7,31 +8,40 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from google.cloud import secretmanager
+from google.cloud import secretmanager_v1
 from google.oauth2 import service_account
 from streamlit_autorefresh import st_autorefresh
 
 # ==============================
-# 0) Secret Manager에서 서비스 계정 키 로드
+# 0) Secret Manager 접근용 클라이언트 (명시적 자격증명)
+# ==============================
+@st.cache_resource(show_spinner=False)
+def get_sm_client():
+    # GCP_SA_KEY_JSON 환경변수에 담긴 서비스 계정 키(JSON 전체)를 사용합니다.
+    key_info = json.loads(os.environ["GCP_SA_KEY_JSON"])
+    creds = service_account.Credentials.from_service_account_info(key_info)
+    return secretmanager_v1.SecretManagerServiceClient(credentials=creds)
+
+# ==============================
+# 1) Secret Manager에서 GSpread용 서비스 계정 키 로드
 # ==============================
 @st.cache_resource(show_spinner=False)
 def load_service_account_info():
-    sm_client = secretmanager.SecretManagerServiceClient()
+    sm_client = get_sm_client()
     # TODO: PROJECT_ID와 Secret 이름을 실제 값으로 바꿔주세요
     secret_name = "projects/PROJECT_ID/secrets/mathquiz-key/versions/latest"
     resp = sm_client.access_secret_version(name=secret_name)
-    payload = resp.payload.data.decode("utf-8")
-    return json.loads(payload)
+    return json.loads(resp.payload.data.decode("utf-8"))
 
 # ==============================
-# 1) GSpread 클라이언트 생성 (Secret Manager 자격증명 사용)
+# 2) GSpread 클라이언트 생성 (Secret Manager 자격증명 사용)
 # ==============================
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
     info = load_service_account_info()
     scope = [
         "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive"
+        "https://www.googleapis.com/auth/drive",
     ]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(info, scope)
     return gspread.authorize(creds)
@@ -48,7 +58,7 @@ def get_worksheet():
 GSHEET_KEY = "17cmgNZiG8vyhQjuSOykoRYcyFyTCzhBd_Z12rChueFU"
 
 # ==============================
-# 2) 결과 저장(append) 함수 (중복 방지 포함)
+# 3) 결과 저장(append) 함수 (중복 방지 포함)
 # ==============================
 def append_result_to_sheet(name: str, school: str, score: int):
     ws = get_worksheet()
@@ -58,7 +68,6 @@ def append_result_to_sheet(name: str, school: str, score: int):
         all_rows = ws.get_all_values()
         if len(all_rows) > 1:
             last = all_rows[-1]
-            # school: idx1, name: idx2, score: idx3
             if last[1] == school and last[2] == name and last[3] == str(score):
                 return
         ws.append_row([ts, school, name, score])
@@ -66,7 +75,7 @@ def append_result_to_sheet(name: str, school: str, score: int):
         st.error(f"구글 시트에 결과 저장 실패: {e}")
 
 # ==============================
-# 3) 랭크 데이터 로드 (캐시)
+# 4) 랭크 데이터 로드 (캐시)
 # ==============================
 @st.cache_data(ttl=60, show_spinner=False)
 def load_rank_data():
@@ -83,7 +92,7 @@ def load_rank_data():
         return pd.DataFrame(columns=["날짜","학교","이름","점수"])
 
 # ==============================
-# 4) 문제 생성
+# 5) 문제 생성
 # ==============================
 def generate_problems():
     probs = []
@@ -92,13 +101,15 @@ def generate_problems():
         probs.append({"type":"mul","a":a,"b":b,"answer":a*b})
     for _ in range(5):
         a, b = random.randint(100,999), random.randint(10,99)
-        probs.append({"type":"div","a":a,"b":b,
-                      "quotient":a//b,"remainder":a%b})
+        probs.append({
+            "type":"div","a":a,"b":b,
+            "quotient":a//b,"remainder":a%b
+        })
     random.shuffle(probs)
     return probs
 
 # ==============================
-# 상태 초기화 함수
+# 상태 초기화
 # ==============================
 def reset_quiz_state():
     st.session_state.q_idx = 0
@@ -112,29 +123,33 @@ def reset_quiz_state():
     st.session_state.show_rank = False
 
 # ==============================
-# 5) UI 구성
+# 6) UI 구성
 # ==============================
 def show_title():
     st.title("🔢 곱셈·나눗셈 퀴즈 챌린지")
 
 def show_rules_and_name_input():
-    st.markdown(
-        """
+    st.markdown("""
         ### 🎯 규칙
         - 총 10문제: 5 곱셈, 5 나눗셈
         - 제한시간 2분, 빠를수록 보너스
         - 오답 시 기회 차감 (총 5회)
         - ‘순위 보기’로 상위 기록 확인
         - 도담초 4학년 2반 화이팅!
-        """
+    """)
+    st.session_state.school = st.text_input(
+        "학교 이름", st.session_state.get("school","")
     )
-    st.session_state.school = st.text_input("학교 이름", st.session_state.school)
-    st.session_state.name   = st.text_input("학생 이름", st.session_state.name)
+    st.session_state.name = st.text_input(
+        "학생 이름", st.session_state.get("name","")
+    )
     c1, c2 = st.columns(2)
     with c1:
         if st.button("시작하기"):
-            if not st.session_state.school.strip(): st.warning("학교를 입력하세요.")
-            elif not st.session_state.name.strip():  st.warning("이름을 입력하세요.")
+            if not st.session_state.school.strip():
+                st.warning("학교를 입력하세요.")
+            elif not st.session_state.name.strip():
+                st.warning("이름을 입력하세요.")
             else:
                 reset_quiz_state()
                 st.session_state.problems = generate_problems()
@@ -180,7 +195,8 @@ def handle_mul(inp, prob, elapsed):
     except:
         st.error("숫자만 가능")
         return
-    bonus = max(0, 120 - int(elapsed)); base = 10
+    bonus = max(0, 120 - int(elapsed))
+    base = 10
     if ua == prob['answer']:
         st.success(f"✅ +{base}+{bonus}={base+bonus}점")
         st.session_state.score += base + bonus
@@ -199,7 +215,8 @@ def handle_div(q, r, prob, elapsed):
     except:
         st.error("숫자만 가능")
         return
-    bonus = max(0, 120 - int(elapsed)); base = prob['quotient']
+    bonus = max(0, 120 - int(elapsed))
+    base = prob['quotient']
     if uq == prob['quotient'] and ur == prob['remainder']:
         st.success(f"✅ +{base}+{bonus}={base+bonus}점")
         st.session_state.score += base + bonus
@@ -218,7 +235,9 @@ def show_result():
     corrects = sum(st.session_state.history)
     st.markdown(f"**점수: {total}점, 정답 {corrects}/{len(st.session_state.problems)}**")
     if not st.session_state.saved:
-        append_result_to_sheet(st.session_state.name, st.session_state.school, total)
+        append_result_to_sheet(
+            st.session_state.name, st.session_state.school, total
+        )
         st.session_state.saved = True
         st.success("구글 시트에 저장됨")
     c1, c2 = st.columns(2)
@@ -299,7 +318,10 @@ def show_rank():
             st.warning("기록없음")
         else:
             for idx, row in m.iterrows():
-                st.markdown(f"**{row['이름']} ({row['학교']}) - 총점 {row['총점']}점 (순위 {idx+1})**")
+                st.markdown(
+                    f"**{row['이름']} ({row['학교']}) - 총점 {row['총점']}점 "
+                    f"(순위 {idx+1})**"
+                )
 
     if st.button("뒤로"):
         st.session_state.show_rank = False
