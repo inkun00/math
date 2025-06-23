@@ -1,24 +1,19 @@
 name: CI/CD – Streamlit App to Cloud Run
 
+# main 브랜치에 푸시될 때마다 실행
 on:
   push:
     branches: [ main ]
 
-# ────────────────────────────────────────
-# 워크플로우 전체에서 공통으로 쓰이는 환경변수
+# 워크플로우 전체에서 사용되는 환경변수
 env:
   GCP_PROJECT: project-176615
   REGION: asia-northeast3
   SERVICE: mathquiz-service
-# ────────────────────────────────────────
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
-    # job 레벨에서만 IMAGE 변수를 참조하도록 합니다
-    env:
-      IMAGE: gcr.io/${{ env.GCP_PROJECT }}/mathquiz-app
 
     steps:
       # 1) 코드 체크아웃
@@ -38,22 +33,22 @@ jobs:
         run: |
           gcloud auth configure-docker
 
-      # 4) Container 빌드 및 GCR 푸시
+      # 4) 컨테이너 빌드 & GCR 푸시
       - name: Build & Push to GCR
         run: |
           gcloud builds submit \
-            --project=${{ env.GCP_PROJECT }} \
-            --region=${{ env.REGION }} \
-            --tag=${{ env.IMAGE }} \
+            --project=${GCP_PROJECT} \
+            --region=${REGION} \
+            --tag=gcr.io/${GCP_PROJECT}/mathquiz-app \
             .
 
       # 5) Cloud Run에 배포
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy ${{ env.SERVICE }} \
-            --image ${{ env.IMAGE }} \
-            --project ${{ env.GCP_PROJECT }} \
-            --region ${{ env.REGION }} \
+          gcloud run deploy ${SERVICE} \
+            --image gcr.io/${GCP_PROJECT}/mathquiz-app \
+            --project ${GCP_PROJECT} \
+            --region ${REGION} \
             --platform managed \
             --allow-unauthenticated \
             --quiet
