@@ -2,3 +2,8 @@ gspread
 oauth2client
 pandas
 streamlit_autorefresh
+google-cloud-core
+google-cloud-storage
+google-cloud-firestore
+google-auth
+google-auth-oauthlib
