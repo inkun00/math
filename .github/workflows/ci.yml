@@ -1,20 +1,19 @@
 name: CI/CD – Streamlit App to Cloud Run
 
-# main 브랜치에 푸시될 때마다 실행
 on:
   push:
     branches: [ main ]
 
+env:
+  GCP_PROJECT: project-176615
+  REGION: asia-northeast3
+  SERVICE: mathquiz-service
+  IMAGE: gcr.io/project-176615/mathquiz-app   # 레포 루트에 Dockerfile이 있다고 가정
+  SOURCE_DIR: .                               # ← Dockerfile 위치. 예: math 로 바꿀 수 있음
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
-    # 이 job 전체에서 사용할 환경변수
-    env:
-      GCP_PROJECT: project-176615
-      REGION: asia-northeast3
-      SERVICE: mathquiz-service
-      # IMAGE는 반복 정의하지 않고, 아래 스크립트에서 사용합니다.
 
     steps:
       - name: Checkout code
@@ -25,34 +24,31 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
 
-      - name: Set up gcloud CLI
+      - name: Install gcloud CLI
         uses: google-github-actions/setup-gcloud@v1
         with:
-          project_id: project-176615
+          project_id: ${{ env.GCP_PROJECT }}
 
-      - name: Build & Push to GCR
+      # ① Docker 레지스트리 인증 (프롬프트 제거)
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker --quiet
+
+      # ② Cloud Build로 컨테이너 빌드 & 푸시
+      - name: Build & Push image
         run: |
-          # 이미지 이름은 직접 문자열로 구성
-          IMAGE="gcr.io/${GCP_PROJECT}/mathquiz-app"
+          gcloud builds submit "$SOURCE_DIR" \
+            --project="$GCP_PROJECT" \
+            --region="$REGION" \
+            --tag="$IMAGE" \
+            --quiet
 
-          # 1) GCR 인증
-          gcloud auth configure-docker
-
-          # 2) Cloud Build로 컨테이너 빌드 & 푸시
-          gcloud builds submit \
-            --project="${GCP_PROJECT}" \
-            --region="${REGION}" \
-            --tag="${IMAGE}" \
-            .
-
+      # ③ Cloud Run에 배포
       - name: Deploy to Cloud Run
         run: |
-          IMAGE="gcr.io/${GCP_PROJECT}/mathquiz-app"
-
-          gcloud run deploy "${SERVICE}" \
-            --image "${IMAGE}" \
-            --project "${GCP_PROJECT}" \
-            --region "${REGION}" \
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --project "$GCP_PROJECT" \
+            --region "$REGION" \
             --platform managed \
             --allow-unauthenticated \
             --quiet
