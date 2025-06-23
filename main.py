@@ -33,7 +33,6 @@ def get_gspread_client():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    # oauth2client용으로 wrapping
     creds = ServiceAccountCredentials.from_json_keyfile_dict(info, scope)
     return gspread.authorize(creds)
 
@@ -99,6 +98,20 @@ def generate_problems():
     return probs
 
 # ==============================
+# 상태 초기화 함수
+# ==============================
+def reset_quiz_state():
+    st.session_state.q_idx = 0
+    st.session_state.lives = 5
+    st.session_state.score = 0
+    st.session_state.start_time = None
+    st.session_state.finished = False
+    st.session_state.history = []
+    st.session_state.problems = []
+    st.session_state.saved = False
+    st.session_state.show_rank = False
+
+# ==============================
 # 5) UI 구성
 # ==============================
 def show_title():
@@ -115,8 +128,8 @@ def show_rules_and_name_input():
         - 도담초 4학년 2반 화이팅!
         """
     )
-    st.session_state.school = st.text_input("학교 이름", st.session_state.school)
-    st.session_state.name   = st.text_input("학생 이름", st.session_state.name)
+    st.session_state.school = st.text_input("학교 이름", st.session_state.school or "")
+    st.session_state.name   = st.text_input("학생 이름", st.session_state.name or "")
     c1, c2 = st.columns(2)
     with c1:
         if st.button("시작하기"):
@@ -260,9 +273,11 @@ def show_rank():
     # 학교 선택 콤보박스
     st.markdown("---")
     st.subheader("학교별 학생 순위 및 시도 기록")
-    schools = school_tot.index.to_list()  # just to keep consistency
-    selected = st.selectbox("학교 선택", options=school_tot.index, format_func=lambda i: school_tot.loc[i-1, "학교"])
-    # 선택된 학교 filter
+    selected = st.selectbox(
+        "학교 선택",
+        options=list(school_tot.index),
+        format_func=lambda i: school_tot.loc[i-1, "학교"]
+    )
     sel_name = school_tot.loc[selected-1, "학교"]
     students = agg[agg["학교"] == sel_name].reset_index(drop=True)
     if not students.empty:
@@ -291,21 +306,15 @@ def show_rank():
         reset_quiz_state()
         st.rerun()
 
-def reset_quiz_state():
-    st.session_state.q_idx = 0
-    st.session_state.lives = 5
-    st.session_state.score = 0
-    st.session_state.start_time = None
-    st.session_state.finished = False
-    st.session_state.history = []
-    st.session_state.problems = []
-    st.session_state.saved = False
-    st.session_state.show_rank = False
-
 def main():
     st.set_page_config(page_title="곱셈·나눗셈 퀴즈 챌린지", layout="centered")
+
+    # ─── 세션 상태 초기화 ──────────────────────────
     if "initialized" not in st.session_state:
+        reset_quiz_state()
         st.session_state.initialized = True
+    # ────────────────────────────────────────────────
+
     show_title()
     if st.session_state.show_rank:
         show_rank()
