@@ -1,3 +1,4 @@
+streamlit
 gspread
 oauth2client
 pandas
@@ -7,3 +8,4 @@ google-cloud-storage
 google-cloud-firestore
 google-auth
 google-auth-oauthlib
+google-cloud-secret-manager
