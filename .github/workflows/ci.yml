@@ -5,54 +5,54 @@ on:
   push:
     branches: [ main ]
 
-# 워크플로우 전체 환경변수
-env:
-  GCP_PROJECT: project-176615
-  REGION: asia-northeast3
-  SERVICE: mathquiz-service
-  IMAGE: gcr.io/${{ env.GCP_PROJECT }}/mathquiz-app
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    # 이 job 전체에서 사용할 환경변수
+    env:
+      GCP_PROJECT: project-176615
+      REGION: asia-northeast3
+      SERVICE: mathquiz-service
+      # IMAGE는 반복 정의하지 않고, 아래 스크립트에서 사용합니다.
+
     steps:
-      # 1) 코드 체크아웃
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2) GCP 인증
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
 
-      # 3) Cloud SDK 설치 & 프로젝트 설정
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v1
         with:
-          project_id: ${{ env.GCP_PROJECT }}
-          install_components: ['beta']
+          project_id: project-176615
 
-      # 4) Container 빌드 & GCR 푸시
       - name: Build & Push to GCR
         run: |
-          # Docker에 GCR 인증
+          # 이미지 이름은 직접 문자열로 구성
+          IMAGE="gcr.io/${GCP_PROJECT}/mathquiz-app"
+
+          # 1) GCR 인증
           gcloud auth configure-docker
-          # Cloud Build로 이미지 빌드 & 푸시
+
+          # 2) Cloud Build로 컨테이너 빌드 & 푸시
           gcloud builds submit \
-            --project=${GCP_PROJECT} \
-            --region=${REGION} \
-            --tag=${IMAGE} \
+            --project="${GCP_PROJECT}" \
+            --region="${REGION}" \
+            --tag="${IMAGE}" \
             .
 
-      # 5) Cloud Run에 배포
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy ${SERVICE} \
-            --image ${IMAGE} \
-            --project ${GCP_PROJECT} \
-            --region ${REGION} \
+          IMAGE="gcr.io/${GCP_PROJECT}/mathquiz-app"
+
+          gcloud run deploy "${SERVICE}" \
+            --image "${IMAGE}" \
+            --project "${GCP_PROJECT}" \
+            --region "${REGION}" \
             --platform managed \
             --allow-unauthenticated \
             --quiet
