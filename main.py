@@ -128,8 +128,8 @@ def show_rules_and_name_input():
         - 도담초 4학년 2반 화이팅!
         """
     )
-    st.session_state.school = st.text_input("학교 이름", st.session_state.school or "")
-    st.session_state.name   = st.text_input("학생 이름", st.session_state.name or "")
+    st.session_state.school = st.text_input("학교 이름", st.session_state.school)
+    st.session_state.name   = st.text_input("학생 이름", st.session_state.name)
     c1, c2 = st.columns(2)
     with c1:
         if st.button("시작하기"):
@@ -312,6 +312,8 @@ def main():
     # ─── 세션 상태 초기화 ──────────────────────────
     if "initialized" not in st.session_state:
         reset_quiz_state()
+        st.session_state.school = ""
+        st.session_state.name = ""
         st.session_state.initialized = True
     # ────────────────────────────────────────────────
 
