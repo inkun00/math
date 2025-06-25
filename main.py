@@ -8,37 +8,26 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from google.cloud import secretmanager_v1
 from google.oauth2 import service_account
 from streamlit_autorefresh import st_autorefresh
 
 # ==============================
-# 0) Secret Manager 접근용 클라이언트 (명시적 자격증명)
+# 0) secrets.toml에서 GSpread 서비스 계정 키 로드
 # ==============================
 @st.cache_resource(show_spinner=False)
-def get_sm_client():
-    # GCP_SA_KEY_JSON 환경변수에 담긴 서비스 계정 키(JSON 전체)를 사용합니다.
-    key_info = json.loads(os.environ["GCP_SA_KEY_JSON"])
-    creds = service_account.Credentials.from_service_account_info(key_info)
-    return secretmanager_v1.SecretManagerServiceClient(credentials=creds)
+def load_gspread_service_account_info():
+    return dict(st.secrets["gspread_service_account"])
 
-# ==============================
-# 1) Secret Manager에서 GSpread용 서비스 계정 키 로드
-# ==============================
 @st.cache_resource(show_spinner=False)
-def load_service_account_info():
-    sm_client = get_sm_client()
-    # TODO: PROJECT_ID와 Secret 이름을 실제 값으로 바꿔주세요
-    secret_name = "projects/PROJECT_ID/secrets/mathquiz-key/versions/latest"
-    resp = sm_client.access_secret_version(name=secret_name)
-    return json.loads(resp.payload.data.decode("utf-8"))
+def load_gcp_service_account_info():
+    return dict(st.secrets["gcp_service_account"])
 
 # ==============================
-# 2) GSpread 클라이언트 생성 (Secret Manager 자격증명 사용)
+# 1) GSpread 클라이언트 생성 (secrets.toml 자격증명 사용)
 # ==============================
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    info = load_service_account_info()
+    info = load_gspread_service_account_info()
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
@@ -58,7 +47,7 @@ def get_worksheet():
 GSHEET_KEY = "17cmgNZiG8vyhQjuSOykoRYcyFyTCzhBd_Z12rChueFU"
 
 # ==============================
-# 3) 결과 저장(append) 함수 (중복 방지 포함)
+# 2) 결과 저장(append) 함수 (중복 방지 포함)
 # ==============================
 def append_result_to_sheet(name: str, school: str, score: int):
     ws = get_worksheet()
@@ -75,7 +64,7 @@ def append_result_to_sheet(name: str, school: str, score: int):
         st.error(f"구글 시트에 결과 저장 실패: {e}")
 
 # ==============================
-# 4) 랭크 데이터 로드 (캐시)
+# 3) 랭크 데이터 로드 (캐시)
 # ==============================
 @st.cache_data(ttl=60, show_spinner=False)
 def load_rank_data():
@@ -92,7 +81,7 @@ def load_rank_data():
         return pd.DataFrame(columns=["날짜","학교","이름","점수"])
 
 # ==============================
-# 5) 문제 생성
+# 4) 문제 생성
 # ==============================
 def generate_problems():
     probs = []
@@ -123,7 +112,7 @@ def reset_quiz_state():
     st.session_state.show_rank = False
 
 # ==============================
-# 6) UI 구성
+# 5) UI 구성
 # ==============================
 def show_title():
     st.title("🔢 곱셈·나눗셈 퀴즈 챌린지")
