@@ -13,7 +13,7 @@ from streamlit_autorefresh import st_autorefresh
 # ==============================
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    info = dict(st.secrets["gspread_service_account"])
+    info = dict(st.secrets["gcp_service_account"])
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
