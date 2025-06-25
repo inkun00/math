@@ -1,5 +1,3 @@
-import os
-import json
 import time
 import random
 import datetime
@@ -8,26 +6,14 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from google.oauth2 import service_account
 from streamlit_autorefresh import st_autorefresh
 
 # ==============================
-# 0) secrets.toml에서 GSpread 서비스 계정 키 로드
-# ==============================
-@st.cache_resource(show_spinner=False)
-def load_gspread_service_account_info():
-    return dict(st.secrets["gspread_service_account"])
-
-@st.cache_resource(show_spinner=False)
-def load_gcp_service_account_info():
-    return dict(st.secrets["gcp_service_account"])
-
-# ==============================
-# 1) GSpread 클라이언트 생성 (secrets.toml 자격증명 사용)
+# 구글시트 서비스 계정 키를 secrets.toml에서 불러옴
 # ==============================
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    info = load_gspread_service_account_info()
+    info = dict(st.secrets["gspread_service_account"])
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
@@ -47,7 +33,7 @@ def get_worksheet():
 GSHEET_KEY = "17cmgNZiG8vyhQjuSOykoRYcyFyTCzhBd_Z12rChueFU"
 
 # ==============================
-# 2) 결과 저장(append) 함수 (중복 방지 포함)
+# 결과 저장(append) 함수 (중복 방지 포함)
 # ==============================
 def append_result_to_sheet(name: str, school: str, score: int):
     ws = get_worksheet()
@@ -64,7 +50,7 @@ def append_result_to_sheet(name: str, school: str, score: int):
         st.error(f"구글 시트에 결과 저장 실패: {e}")
 
 # ==============================
-# 3) 랭크 데이터 로드 (캐시)
+# 랭크 데이터 로드 (캐시)
 # ==============================
 @st.cache_data(ttl=60, show_spinner=False)
 def load_rank_data():
@@ -81,7 +67,7 @@ def load_rank_data():
         return pd.DataFrame(columns=["날짜","학교","이름","점수"])
 
 # ==============================
-# 4) 문제 생성
+# 문제 생성
 # ==============================
 def generate_problems():
     probs = []
@@ -112,7 +98,7 @@ def reset_quiz_state():
     st.session_state.show_rank = False
 
 # ==============================
-# 5) UI 구성
+# UI 구성
 # ==============================
 def show_title():
     st.title("🔢 곱셈·나눗셈 퀴즈 챌린지")
