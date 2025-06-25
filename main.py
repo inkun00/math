@@ -13,7 +13,7 @@ from streamlit_autorefresh import st_autorefresh
 # ==============================
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    info = dict(st.secrets["gcp_service_account"])
+    info = dict(st.secrets["gcp_service_account"])  # gspread_service_account 대신 gcp_service_account로!
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
@@ -267,6 +267,14 @@ def show_rank():
     # 학교 선택 콤보박스
     st.markdown("---")
     st.subheader("학교별 학생 순위 및 시도 기록")
+    if school_tot.empty:
+        st.info("학교 데이터가 없습니다.")
+        if st.button("뒤로"):
+            st.session_state.show_rank = False
+            reset_quiz_state()
+            st.rerun()
+        return
+
     selected = st.selectbox(
         "학교 선택",
         options=list(school_tot.index),
