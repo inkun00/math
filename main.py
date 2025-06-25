@@ -13,7 +13,7 @@ from streamlit_autorefresh import st_autorefresh
 # ==============================
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    info = dict(st.secrets["gcp_service_account"])  # gspread_service_account 대신 gcp_service_account로!
+    info = dict(st.secrets["gcp_service_account"])
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
@@ -258,7 +258,6 @@ def show_rank():
     # 학교별 총점
     school_tot = df.groupby("학교")["점수"].sum().reset_index()
     school_tot = school_tot.sort_values("점수", ascending=False).reset_index(drop=True)
-    school_tot.index += 1
     school_tot.rename(columns={"점수":"총점"}, inplace=True)
     st.markdown("---")
     st.subheader("학교별 총점 Top5")
@@ -267,7 +266,8 @@ def show_rank():
     # 학교 선택 콤보박스
     st.markdown("---")
     st.subheader("학교별 학생 순위 및 시도 기록")
-    if school_tot.empty:
+    school_list = list(school_tot["학교"])
+    if not school_list:
         st.info("학교 데이터가 없습니다.")
         if st.button("뒤로"):
             st.session_state.show_rank = False
@@ -275,12 +275,8 @@ def show_rank():
             st.rerun()
         return
 
-    selected = st.selectbox(
-        "학교 선택",
-        options=list(school_tot.index),
-        format_func=lambda i: school_tot.loc[i-1, "학교"]
-    )
-    sel_name = school_tot.loc[selected-1, "학교"]
+    selected_school = st.selectbox("학교 선택", options=school_list)
+    sel_name = selected_school
     students = agg[agg["학교"] == sel_name].reset_index(drop=True)
     if not students.empty:
         students.index += 1
